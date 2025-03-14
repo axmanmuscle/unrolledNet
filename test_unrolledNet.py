@@ -3,7 +3,9 @@ import scipy.io as sio
 from unrollednet import Unrolled_Network, newA
 import numpy as np
 from scipy.stats import laplace, norm
-from torchsummary import summary
+from torchinfo import summary
+
+from zs_unrollednet import ZS_Unrolled_Network
 
 def test_adjoint(x0, f, ip = lambda x, y: torch.vdot(x, y), num_test = 10):
     """
@@ -110,7 +112,8 @@ def vdSampleMask(smask, sigmas, numSamps, maskType = 'laplace'):
     return mask
 
 def main():
-    data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
+    # data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
+    data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
     kSpace = data['d2']
     kSpace = kSpace / np.max(np.abs(kSpace))
     sMaps = data['smap']
@@ -148,8 +151,21 @@ def main():
     # test_adjoint(x0, A, ip)
     # print(f'Adjoint test passed')
 
-    model = Unrolled_Network(A, b, mk2, sMaps, sImg, 5)
-    print(summary(model, (1, 256, 256)))
+    device = torch.device("cpu")
+
+    mk2 = mk2.to(device)
+    b = b.to(device)
+    sMaps = sMaps.to(device)
+
+    # model = Unrolled_Network(A, b, mk2, sMaps, sImg, 5)
+    # model = model.to(device)
+    # print(summary(model, (1, 256, 256), device="cpu"))
+    
+    model2 = ZS_Unrolled_Network(sMaps, sImg)
+    model2 = model2.to(device)
+    print(summary(model2, [(2, 1, 256, 256), mk2.shape, b.shape], dtypes=[torch.complex64, torch.bool, torch.complex64], device="cpu"))
+
+
     return 0
 
 if __name__ == "__main__":

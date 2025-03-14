@@ -84,7 +84,7 @@ class build_unet(nn.Module):
 
         """ pad to 512 """
         s0 = self.enlarge(inputs)
-
+        
         """ Encoder """
         s1, p1 = self.e1(s0)
         s2, p2 = self.e2(p1)
