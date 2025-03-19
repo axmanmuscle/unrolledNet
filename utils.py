@@ -209,7 +209,7 @@ def make_masks(sImg, rng, samp_frac, train_frac, loss_frac=0.3):
       sImg - dimensions of image
       rng - numpy random number generator
       samp_frac - fraction (0 < x < 1) of columns to use as undersampling
-      train_frac - fraction (9 < x < 1) of samples to use as training, > 0.85 recommended
+      train_frac - fraction (0 < x < 1) of samples to use as training, > 0.85 recommended
       loss_frac - fraction (0 < x < 1) of training mask to use as the loss calculation, < 0.3 recommended
 
     """
