@@ -69,7 +69,7 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
       if data_consistency:
         #tdata_consistency = tdata[:, :, tmask > 0]
         tdata_consistency = tdata
-        im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( tdata ), norm='ortho' ) ), -1)
+        im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( tdata, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
         out = model(im, tmask>0, tdata_consistency)
       else:
         out = model(tdata) 
@@ -210,7 +210,7 @@ def main():
   read in data and decide what to iterate over
   """
   rng = np.random.default_rng(20250313)
-  data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
+  data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
   kSpace = data['d2']
   kSpace = kSpace / np.max(np.abs(kSpace))
   sMaps = data['smap']
@@ -218,7 +218,7 @@ def main():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/home/alex/Documents/research/mri/results/313_tests'
+  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/313_tests'
 
   # mask = vdSampleMask(kSpace.shape[0:2], [30, 30], np.round(np.prod(kSpace.shape[0:2]) * 0.4))
   # us_kSpace = kSpace*mask[:, :, np.newaxis]
@@ -238,7 +238,7 @@ def main():
   # us_kSpace[~mask] = 0
   # ks = torch.tensor(us_kSpace)
 
-  samp_fracs = [0.25]
+  samp_fracs = [0.5]
   train_fracs = [0.8]
   train_loss_split_frac = 0.8
   k_s = [50]

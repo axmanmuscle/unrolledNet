@@ -4,6 +4,68 @@
 
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
+
+def view_im_cube(data, title=''):
+    """
+    the expectation here is that we're plotting data of size [Nx x Ny x C]
+    and we will make C subplots
+    """
+    sImg = data.shape
+    fig = plt.figure()
+    C = sImg[-1]
+    cols = int(np.ceil(C/2))
+    rows = int(np.ceil(C/cols))
+
+    for i in range(C):
+        ax = fig.add_subplot(rows, cols, i+1)
+        ax.imshow(np.abs(data[:,:,i]), cmap='gray')
+        if len(title) == 0:
+            ax.set_title('Coil ' + str(i))
+
+    if len(title) > 0:
+        plt.suptitle(title)
+
+    plt.show()
+
+
+def kspace_to_imspace(kspace):
+
+    im_space = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( kspace, axes=(0, 1)),  axes=(0, 1) ), axes=(0,1))
+
+    return im_space
+
+def view_im(kspace, title=''):
+
+    im_space = kspace_to_imspace(kspace)
+
+    plt.imshow( np.abs( im_space ), cmap='grey')
+
+    if len(title) > 0:
+        plt.title(title)
+    plt.show()
+    
+def size2imgCoordinates(n):
+    """
+    INPUTS:
+        n - array giving number of elements in each dimension
+    OUTPUTS:
+        coords - if n is a scalar, a 1D array of image coordinates
+                 if n is an array, then a (size(n) x 1) array of image coordinates
+    """
+    if type(n) == list or tuple:
+        numN = len(n)
+        coords = []
+        for i in range(numN):
+            coords.append(size2img1d(n[i]))
+    else:
+        coords = [size2img1d(n)]
+
+    return coords
+
+def size2img1d(N):
+    coords = np.array([i for i in range(N)]) - np.floor(0.5*N)
+    return coords.astype('int')
 
 def undersample_kspace(sImg, rng, samp_frac):
     """

@@ -9,6 +9,7 @@ import numpy as np
 from unet import build_unet
 from torchsummary import summary
 import gc
+import utils
 
 
 class prox_block(nn.Module):
@@ -36,14 +37,14 @@ class prox_block(nn.Module):
 
         for i in range(self.nCoils):
             out[...,i] = sm[...,i] * x
-        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out ), norm='ortho' ) )
+        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
 
         if len(mask.shape) < 3:
           out[..., mask, :] = b[..., mask, :]
         else:
           out[mask] = b[mask]
 
-        out = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( out ), norm='ortho' ) )
+        out = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
         out = torch.sum( torch.conj(sm) * out, -1 ) #roemer
 
         #out = torch.view_as_real(out)
@@ -79,9 +80,9 @@ class unrolled_block(nn.Module):
 
     def applyF(self, x, op='notransp'):
         if op == 'transp':
-            out = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( x ), norm='ortho' ) )
+            out = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( x, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
         else:
-            out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( x ), norm='ortho' ) )
+            out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( x, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
         return out
 
     def grad_desc(self, x, A, b):
@@ -95,11 +96,10 @@ class unrolled_block(nn.Module):
     
     def prox(self, x, mask, b):
         """
-        TODO: write prox operator
         apply sensitivity maps
         apply fourier transform
         replace data at mask with b
-        roemer recon (?)
+        roemer recon
         """
         # out = torch.zeros(size=[self.nBatch, *self.sMaps.shape], dtype=self.sMaps.dtype)
         out = torch.zeros(size = [*x.shape, self.nCoils], dtype=self.sMaps.dtype, device=self.device)
