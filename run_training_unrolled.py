@@ -69,11 +69,17 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
       tmask = tmask.to(device)
       lmask = lmask.to(device)
 
-      tdata = training_data * tmask.unsqueeze(2) # TODO unsqueeze tmask
+      if sc:
+        tdata = training_data * tmask
+      else:
+        tdata = training_data * tmask.unsqueeze(2) # TODO unsqueeze tmask
       if data_consistency:
         #tdata_consistency = tdata[:, :, tmask > 0]
         tdata_consistency = tdata
-        im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( tdata, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
+        if sc:
+          im = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( tdata, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+        else:
+          im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( tdata, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
         out = model(im, tmask>0, tdata_consistency)
       else:
         out = model(tdata) 
@@ -88,7 +94,10 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
       optimizer.step()
 
     if data_consistency:
-      val_im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( training_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
+      if sc:
+        val_im = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( training_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+      else:
+        val_im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( training_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
       val_out = model(val_im, training_mask, all_tdata_consistency)
     else:
       val_out = model(training_data)
@@ -139,7 +148,11 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
   all_data = training_data+val_data
 
   if data_consistency:
-    all_im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
+    if sc:
+      all_im = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+    else:
+      all_im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
+      
     out = model(all_im, alldata_mask, alldata_consistency)
     tstr = 'dc_output.png'
   else:
@@ -173,9 +186,14 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
   else:
     sc = False
 
-  sub_kspace = torch.tensor( usMask[:, :, np.newaxis] ) * ks
-  training_kspace = torch.tensor( train_mask[:, :, np.newaxis] ) * ks
-  val_kspace = torch.tensor( val_mask[:, :, np.newaxis] ) * ks
+  if sc:
+    sub_kspace = torch.tensor( usMask ) * ks
+    training_kspace = torch.tensor( train_mask ) * ks
+    val_kspace = torch.tensor( val_mask ) * ks
+  else:
+    sub_kspace = torch.tensor( usMask[:, :, np.newaxis] ) * ks
+    training_kspace = torch.tensor( train_mask[:, :, np.newaxis] ) * ks
+    val_kspace = torch.tensor( val_mask[:, :, np.newaxis] ) * ks
 
   sub_kspace = torch.tensor(sub_kspace)
   training_kspace = torch.tensor(training_kspace)
@@ -231,13 +249,12 @@ def test_sc():
 
   results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/sc_test'
 
-
   im2 = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( kSpace, axes=(0,1)), axes=(0,1)), axes=(0,1))
   recon = utils.mri_reconRoemer(im2, sMaps)
 
   ks_sc = np.fft.fftshift( np.fft.fftn( np.fft.ifftshift( recon, axes=(0,1)), axes=(0,1)), axes=(0,1))
 
-  ks_sc = torch.tensor(ks_sc)
+  ks_sc = torch.tensor(ks_sc, dtype=torch.complex64)
 
   sImg = ks_sc.shape
   kSpace = ks_sc.unsqueeze(0)
@@ -246,7 +263,7 @@ def test_sc():
   samp_fracs = [0.25]
   train_fracs = [0.8]
   train_loss_split_frac = 0.8
-  k_s = [50]
+  k_s = [3]
   dcs = [True]
   val_stop_trainings = [15]
 
@@ -260,7 +277,7 @@ def test_sc():
 
             run_training(kSpace, sImg, sImg, sMaps, rng, 
                       sf, tf, train_loss_split_frac, 
-                      k, dc, results_dir, vst, 50)
+                      k, dc, results_dir, vst, 3)
 
 def main():
   """

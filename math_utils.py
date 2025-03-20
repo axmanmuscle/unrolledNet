@@ -207,8 +207,8 @@ def unrolled_loss_mixed_sc(output, target, mask):
   so we need to go to k-space and then do L2 loss on the masked data
   """
 
-    om = output[mask > 0]
-    tm = target[mask > 0]
+    om = output[..., mask > 0]
+    tm = target[..., mask > 0]
 
     out = torch.norm(om.flatten() - tm.flatten()) / torch.norm(tm.flatten()) + torch.norm(om.flatten() - tm.flatten(), 1) / torch.norm(tm.flatten(), 1)
 

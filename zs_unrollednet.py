@@ -200,14 +200,10 @@ class prox_block_sc(nn.Module):
         simply to do a proximal step at the very end for data consistency
         """
         x, mask, b = inputs
-        out = torch.zeros(size = [*x.shape], dtype=self.sMaps.dtype, device = self.device)
 
-        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( x, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
 
-        if len(mask.shape) < 3:
-          out[..., mask, :] = b[..., mask, :]
-        else:
-          out[mask] = b[mask]
+        out[..., mask] = b[..., mask]
 
         out = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
 
@@ -245,12 +241,9 @@ class unrolled_block_sc(nn.Module):
         replace data at mask with b
         roemer recon
         """
-        # out = torch.zeros(size=[self.nBatch, *self.sMaps.shape], dtype=self.sMaps.dtype)
-        out = torch.zeros(size = [*x.shape], dtype=self.sMaps.dtype, device=self.device)
+        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( x ), norm='ortho' ) )
 
-        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out ), norm='ortho' ) )
-
-        out[mask] = b[mask] # projection
+        out[..., mask] = b[..., mask] # projection
         
         out = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( out ), norm='ortho' ) )
 
@@ -268,9 +261,8 @@ class unrolled_block_sc(nn.Module):
         """
         x, mask, b = inputs # unpack
         def applyM(x):
-          out = x
-          out[~mask] = 0
-          return out
+          x[..., ~mask] = 0
+          return x
 
         def applyA(x, op='notransp'):
           if op == 'transp':
@@ -279,7 +271,7 @@ class unrolled_block_sc(nn.Module):
             out = self.applyF(out, 'transp')
           else:
             # apply f
-            out = self.applyF(out)
+            out = self.applyF(x)
             # apply mask
             out = applyM(out)
 
