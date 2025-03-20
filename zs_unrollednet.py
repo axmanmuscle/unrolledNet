@@ -184,14 +184,42 @@ class unrolled_block(nn.Module):
         gc.collect()
 
         return out, mask, b
-        
+
+class prox_block_sc(nn.Module):
+    """
+    just a module for the proximal block
+    """
+
+    def __init__(self, device):
+        super(prox_block_sc, self).__init__()
+        self.device = device
+
+    def forward(self, inputs):
+        """
+        forward method for prox block
+        simply to do a proximal step at the very end for data consistency
+        """
+        x, mask, b = inputs
+        out = torch.zeros(size = [*x.shape], dtype=self.sMaps.dtype, device = self.device)
+
+        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+
+        if len(mask.shape) < 3:
+          out[..., mask, :] = b[..., mask, :]
+        else:
+          out[mask] = b[mask]
+
+        out = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+
+        return out
+
 class unrolled_block_sc(nn.Module):
     """
     single coil version of the unrolled block
     no more sensitivity maps
     """
     def __init__(self, shape, device):
-        super(unrolled_block, self).__init__()
+        super(unrolled_block_sc, self).__init__()
         self.device = device
         self.nn = build_unet(shape[1])
     
@@ -284,13 +312,19 @@ class unrolled_block_sc(nn.Module):
         return out, mask, b
 
 class ZS_Unrolled_Network(nn.Module):
-    def __init__(self, sMaps, sImg, device, n=10):
+    def __init__(self, sImg, device, sMaps=[], n=10):
         super(ZS_Unrolled_Network, self).__init__()
         self.n = n
         mod = []
-        for i in range(n):
-            mod.append(unrolled_block(sMaps, sImg, device))
-        mod.append(prox_block(sMaps, device))
+        if len(sMaps) == 0: # single coil
+            for i in range(n):
+                mod.append(unrolled_block_sc(sImg, device))
+            mod.append(prox_block_sc(device))
+        else: # multicoil
+            for i in range(n):
+                mod.append(unrolled_block(sMaps, sImg, device))
+            mod.append(prox_block(sMaps, device))
+
         self.model = nn.Sequential(*mod)
 
     def forward(self, inputs, mask, b):

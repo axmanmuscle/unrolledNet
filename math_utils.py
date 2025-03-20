@@ -176,6 +176,47 @@ def unrolled_loss_mixed(output, target, mask, sMaps):
 
     return out 
 
+def unrolled_loss_sc(output, target, mask):
+  """
+  here the output is going to be the output of the network in image space [Nbatch x Nx x Ny]
+  and target is the k-space [Nbatch x Nchannel x Nx x Ny x Ncoil]
+  mask will be size of k-space
+
+  so we need to go to k-space and then do L2 loss on the masked data
+  """
+
+  if target.shape[0] == 1:
+    target = target.squeeze()
+ 
+  om = output[mask > 0]
+  tm = target[mask > 0]
+
+  out = torch.norm(om.flatten() - tm.flatten()) / torch.norm(tm.flatten())
+
+  del om, tm
+  gc.collect()
+
+  return out  
+
+def unrolled_loss_mixed_sc(output, target, mask):
+    """
+  here the output is going to be the output of the network in image space [Nbatch x Nx x Ny]
+  and target is the k-space [Nbatch x Nchannel x Nx x Ny x Ncoil]
+  mask will be size of k-space
+
+  so we need to go to k-space and then do L2 loss on the masked data
+  """
+
+    om = output[mask > 0]
+    tm = target[mask > 0]
+
+    out = torch.norm(om.flatten() - tm.flatten()) / torch.norm(tm.flatten()) + torch.norm(om.flatten() - tm.flatten(), 1) / torch.norm(tm.flatten(), 1)
+
+    del om, tm
+    gc.collect()
+
+    return out 
+
 def mixed_loss(output, target, mask):
     om = output * mask
     tm = target * mask

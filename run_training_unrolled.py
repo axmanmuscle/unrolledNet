@@ -25,6 +25,10 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
     - the data in is undersampled k-space. split into train and validation (oh this should be done earlier)
     - the training data is split out and run through the model. compare loss
   """
+  if len(sMaps) == 0:
+    sc = True
+  else:
+    sc = False
   model.train()
 
   training_data = training_data.to(device)
@@ -73,12 +77,11 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
         out = model(im, tmask>0, tdata_consistency)
       else:
         out = model(tdata) 
-      # this is an interesting point because "model" will need to encompass the fourier transforms
       #if jdx < 1:
-      if True:
-        train_loss = loss_fun(out, training_data, lmask, sMaps) # gt needs to come from the data loader?
+      if sc:
+        train_loss = loss_fun(out, training_data, lmask)
       else:
-        train_loss += loss_fun(out, training_data, lmask)
+        train_loss = loss_fun(out, training_data, lmask, sMaps) # gt needs to come from the data loader?
       avg_train_loss += train_loss.cpu().data
       optimizer.zero_grad()
       train_loss.backward()
@@ -90,7 +93,10 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
     else:
       val_out = model(training_data)
 
-    val_loss = loss_fun(val_out, val_data, val_mask, sMaps)
+    if sc:
+      val_loss = loss_fun(val_out, val_data, val_mask)
+    else:
+      val_loss = loss_fun(val_out, val_data, val_mask, sMaps)
     vl_data = val_loss.cpu().data
 
     tl_ar.append(avg_train_loss / (jdx+1))
@@ -162,6 +168,10 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
   # train_mask = torch.tensor(train_mask)
   # val_mask = torch.tensor(val_mask)
 
+  if len(sMaps) == 0:
+    sc = True
+  else:
+    sc = False
 
   sub_kspace = torch.tensor( usMask[:, :, np.newaxis] ) * ks
   training_kspace = torch.tensor( train_mask[:, :, np.newaxis] ) * ks
@@ -174,11 +184,14 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-  if dc:
-    sMaps = sMaps.to(device)
-    model = ZS_Unrolled_Network(sMaps, sImg, device, 3)
+  if sc:
+    print('single coil')
+    model = ZS_Unrolled_Network(sImg, device, n=3)
   else:
-    model = zs_model(*(ks.shape))
+    print('multi coil')
+    sMaps = sMaps.to(device)
+    model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
+
   model = model.to(device)
   optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
 
@@ -201,9 +214,53 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     os.mkdir(directory)
 
   training_loop(training_kspace, val_kspace, val_mask, tl_masks,
-              model, math_utils.unrolled_loss, sMaps, optimizer, dc, 
+              model, math_utils.unrolled_loss_mixed_sc, sMaps, optimizer, dc, 
               val_stop_training, num_epochs, device,
               directory)
+
+def test_sc():
+  """
+  read in data and decide what to iterate over
+  """
+  rng = np.random.default_rng(20250313)
+  data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
+  kSpace = data['d2']
+  kSpace = kSpace / np.max(np.abs(kSpace))
+  sMaps = data['smap']
+  sMaps = sMaps / np.max(np.abs(sMaps))
+
+  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/sc_test'
+
+
+  im2 = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( kSpace, axes=(0,1)), axes=(0,1)), axes=(0,1))
+  recon = utils.mri_reconRoemer(im2, sMaps)
+
+  ks_sc = np.fft.fftshift( np.fft.fftn( np.fft.ifftshift( recon, axes=(0,1)), axes=(0,1)), axes=(0,1))
+
+  ks_sc = torch.tensor(ks_sc)
+
+  sImg = ks_sc.shape
+  kSpace = ks_sc.unsqueeze(0)
+  kSpace = kSpace.unsqueeze(0)
+
+  samp_fracs = [0.25]
+  train_fracs = [0.8]
+  train_loss_split_frac = 0.8
+  k_s = [50]
+  dcs = [True]
+  val_stop_trainings = [15]
+
+  sMaps = []
+
+  for sf in samp_fracs:
+    for tf in train_fracs:
+      for k in k_s:
+        for vst in val_stop_trainings:
+          for dc in dcs:
+
+            run_training(kSpace, sImg, sImg, sMaps, rng, 
+                      sf, tf, train_loss_split_frac, 
+                      k, dc, results_dir, vst, 50)
 
 def main():
   """
@@ -257,4 +314,4 @@ def main():
   return 0
   
 if __name__ == "__main__":
-  main()
+  test_sc()

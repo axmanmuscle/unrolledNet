@@ -196,6 +196,21 @@ def training_loss_split(training_mask, rng, loss_frac):
     train_mask = training_mask - loss_mask
     return train_mask, loss_mask
 
+def mri_reconRoemer(coilRecons, sMaps = []):
+    """
+    implements the Roemer reconstruction method
+    https://pubmed.ncbi.nlm.nih.gov/2266841/
+    numpy version
+    """
+
+    if len(sMaps) == 0:
+        ssqRecon = np.sqrt( np.sum( coilRecons * np.conj(coilRecons), 2 ))
+        sMaps = coilRecons / ssqRecon
+        sMaps[sMaps == np.inf] = 0
+    
+    recon = np.sum( coilRecons * np.conj(sMaps), 2)
+
+    return recon
 
 def make_masks(sImg, rng, samp_frac, train_frac, loss_frac=0.3):
     """
