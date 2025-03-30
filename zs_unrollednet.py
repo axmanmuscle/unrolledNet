@@ -232,6 +232,7 @@ class unrolled_block_sc(nn.Module):
         """
         xt = A(x) - b
         xt = A(xt, 'transp')
+        # we need a step size here i think
         x1 = x - xt
         return x1
     
