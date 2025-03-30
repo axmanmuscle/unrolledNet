@@ -5,6 +5,8 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.stats import laplace, norm
+
 
 def view_im_cube(data, title=''):
     """
@@ -211,6 +213,48 @@ def mri_reconRoemer(coilRecons, sMaps = []):
     recon = np.sum( coilRecons * np.conj(sMaps), 2)
 
     return recon
+
+def vdSampleMask(smask, sigmas, numSamps, maskType = 'laplace'):
+    """
+    generates a vd sample mask
+    INPUTS:
+        smask - 1-D array corresponding to number of samples in each dimension
+        sigmas - 1-D array corresponding to the standard deviation of the distribution
+                 in each dimension
+        numSamps - number of (total) samples
+
+    """
+    maxIters = 500
+    rng = np.random.default_rng(20230911)
+
+    coords = size2imgCoordinates(smask)
+
+    mask = np.zeros(smask)
+    nDims = len(smask) # can't pass in just an integer
+
+    if maskType == 'laplace':
+        pdf = lambda x, sig: laplace.pdf(x, loc=0, scale=np.sqrt(0.5*sig*sig))
+    elif maskType == 'gaussian':
+        pdf = lambda x, sig: norm.pdf(x, loc=0, scale=sig)
+
+    for idx in range(maxIters):
+        sampsLeft = int(numSamps - mask.sum(dtype=int))
+        dimSamps = np.zeros((nDims, sampsLeft))
+        for dimIdx in range(nDims):
+            c = coords[dimIdx]
+            probs = pdf(c, sigmas[dimIdx])
+            probs = probs / sum(probs)
+            samps = rng.choice(c, sampsLeft, p=probs)
+            dimSamps[dimIdx, :] = samps - min(c)
+        
+        mask[tuple(dimSamps.astype(int))] = 1
+
+        if mask.sum(dtype=int) == numSamps:
+            return mask
+    
+    print('hit max iters vdSampleMask')
+    return mask
+
 
 def make_masks(sImg, rng, samp_frac, train_frac, loss_frac=0.3):
     """

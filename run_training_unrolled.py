@@ -14,6 +14,7 @@ from tqdm import tqdm
 from zs_unrollednet import ZS_Unrolled_Network
 import matplotlib.pyplot as plt
 import scipy.io as sio
+import gc
 
 
 def training_loop(training_data, val_data, val_mask, tl_masks,
@@ -132,7 +133,25 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
     # optimizer.step()
 
     print('on step {} of {} with tl {:.2E} and vl {:.2E}'.format(ep, num_epochs, float(tl_ar[-1]), float(val_loss.data)))
-    # print(f'on step {idx} of {num_epochs} with tl {round(float(train_loss.data), 3)} and vl {round(float(val_loss.data), 3)}')
+
+    ## optional
+    # save images at each epoch
+    if sc:
+      all_im = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+      out = model(all_im, alldata_mask, alldata_consistency)
+      tstr = f'output_epoch{ep}.png'
+
+      out = out.cpu()
+      oc = np.squeeze(out.detach().numpy())
+      img_dir = os.path.join(directory, 'imgs/')
+
+      if not os.path.isdir(img_dir):
+        os.mkdir(img_dir)
+      plt.imsave(os.path.join(img_dir, tstr), np.abs( oc ), cmap='grey')
+
+      plt.clf()
+      del all_im, out, oc
+      gc.collect()
 
   plt.plot(tl_ar)
   plt.plot(vl_ar)
@@ -172,7 +191,8 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
                  train_loss_split_frac, k, dc, results_dir,
                  val_stop_training, num_epochs=100):
                    
-  usMask = utils.undersample_kspace_gaussian(sMask, rng, samp_frac)
+  usMask = utils.vdSampleMask(sMask, [30, 30], np.round(samp_frac * np.prod(sImg)))
+  # usMask = utils.undersample_kspace_gaussian(sMask, rng, samp_frac)
   #undersample_mask = np.zeros(sImg)
   #undersample_mask[:, left_idx:right_idx] = usMask
   train_mask, val_mask = utils.mask_split(usMask, rng, train_frac)
@@ -221,15 +241,19 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     tm, lm = utils.mask_split(train_mask, rng, train_loss_split_frac)
     tl_masks.append((tm, lm))
 
-  optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
-
-  directory = f'sf{int(samp_frac*100)}p_tf{int(train_frac*100)}p_k{k}_vst{val_stop_training}'
+  directory = f'vd_sf{int(samp_frac*100)}p_tf{int(train_frac*100)}p_k{k}_vst{val_stop_training}'
   if dc:
     directory = "dc_" + directory
   directory = os.path.join(results_dir, directory)
 
   if not os.path.isdir(directory):
     os.mkdir(directory)
+
+  if sc:
+    oc = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( sub_kspace, axes=(-1,-2)),  axes=(-1,-2) ), axes=(-1,-2))
+    plt.imsave(os.path.join(directory, 'zero_filled.png'), np.abs( np.squeeze( oc ) ), cmap='grey')
+    oc = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( ks, axes=(-1,-2)),  axes=(-1,-2) ), axes=(-1,-2))
+    plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( oc ) ), cmap='grey')
 
   training_loop(training_kspace, val_kspace, val_mask, tl_masks,
               model, math_utils.unrolled_loss_mixed_sc, sMaps, optimizer, dc, 
@@ -241,13 +265,13 @@ def test_sc():
   read in data and decide what to iterate over
   """
   rng = np.random.default_rng(20250313)
-  data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
+  data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
   kSpace = data['d2']
   kSpace = kSpace / np.max(np.abs(kSpace))
   sMaps = data['smap']
   sMaps = sMaps / np.max(np.abs(sMaps))
 
-  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/sc_test'
+  results_dir = '/home/alex/Documents/research/mri/results/sc_test'
 
   im2 = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( kSpace, axes=(0,1)), axes=(0,1)), axes=(0,1))
   recon = utils.mri_reconRoemer(im2, sMaps)
@@ -260,10 +284,10 @@ def test_sc():
   kSpace = ks_sc.unsqueeze(0)
   kSpace = kSpace.unsqueeze(0)
 
-  samp_fracs = [0.25]
-  train_fracs = [0.8]
-  train_loss_split_frac = 0.8
-  k_s = [3]
+  samp_fracs = [0.15, 0.1, 0.05]
+  train_fracs = [0.9]
+  train_loss_split_frac = 0.85
+  k_s = [50]
   dcs = [True]
   val_stop_trainings = [15]
 
@@ -277,7 +301,7 @@ def test_sc():
 
             run_training(kSpace, sImg, sImg, sMaps, rng, 
                       sf, tf, train_loss_split_frac, 
-                      k, dc, results_dir, vst, 3)
+                      k, dc, results_dir, vst, 100)
 
 def main():
   """

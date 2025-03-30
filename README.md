@@ -15,3 +15,6 @@ Need to get the hooks on so this can train zero shot self supervised style
  Something is clearly going wrong with it. We need to see if the steps of gradient descent and the prox without the NN are doing the correct thing.
 
  Before that, why don't we double check that SENSE reconstruction is lining up with Nick's implementation.
+
+ ## 320
+ Change to VD sampling mask
