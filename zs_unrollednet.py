@@ -240,10 +240,10 @@ class unrolled_block_sc(nn.Module):
         
         gx = grad(x)
         gxNorm = torch.norm(gx.reshape(-1, 1))**2
-        alpha_bar = 1e-3 # TODO this may need to get changed
+        alpha = 1e-4 # TODO this may need to get changed
         rho = 0.9
         c = 0.9
-        max_linesearch_iters = 50
+        max_linesearch_iters = 250
         obj_x = obj(x)
 
         linesearch_iter = 0
@@ -301,28 +301,28 @@ class unrolled_block_sc(nn.Module):
           return out
 
         out = self.grad_desc(x, applyA, b)
-        out = self.prox(out, mask, b)
+        # out = self.prox(out, mask, b)
 
-        out = torch.view_as_real(out)
-        n = out.shape[-3]
-        out_r = torch.cat((out[..., 0], out[..., 1]), dim=2)
+        # out = torch.view_as_real(out)
+        # n = out.shape[-3]
+        # out_r = torch.cat((out[..., 0], out[..., 1]), dim=2)
 
-        del out # memory management
-        gc.collect()
+        # del out # memory management
+        # gc.collect()
 
-        post_unet = self.nn(out_r)
-        post_unet_r = post_unet[..., :n, :]
-        post_unet_im = post_unet[..., n:, :]
+        # post_unet = self.nn(out_r)
+        # post_unet_r = post_unet[..., :n, :]
+        # post_unet_im = post_unet[..., n:, :]
 
-        post_unet = torch.stack((post_unet_r, post_unet_im), dim=-1)
+        # post_unet = torch.stack((post_unet_r, post_unet_im), dim=-1)
         
-        del post_unet_r, post_unet_im
-        gc.collect()
+        # del post_unet_r, post_unet_im
+        # gc.collect()
 
-        out = torch.view_as_complex(post_unet)
+        # out = torch.view_as_complex(post_unet)
 
-        del post_unet
-        gc.collect()
+        # del post_unet
+        # gc.collect()
 
         return out, mask, b
 
@@ -330,6 +330,7 @@ class ZS_Unrolled_Network(nn.Module):
     def __init__(self, sImg, device, sMaps=[], n=10):
         super(ZS_Unrolled_Network, self).__init__()
         self.n = n
+        self.device = device
         mod = []
         if len(sMaps) == 0: # single coil
             for i in range(n):

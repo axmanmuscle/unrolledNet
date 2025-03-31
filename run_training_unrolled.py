@@ -187,6 +187,23 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
 
   plt.clf()
 
+def test_only_gd(ks, model, directory, mask):
+
+  x0 = torch.rand(ks.shape)
+  x0 = x0.to(model.device)
+  ks = ks.to(model.device)
+  mask = mask.to(model.device)
+  out = model(x0, mask, ks)
+  out = out.cpu()
+  oc = np.squeeze(out.detach().numpy())
+
+  tstr = 'dc_output.png'
+  plt.imsave(os.path.join(directory, tstr), np.abs( oc ), cmap='grey')
+
+  plt.clf()
+
+
+
 def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac, 
                  train_loss_split_frac, k, dc, results_dir,
                  val_stop_training, num_epochs=100):
@@ -224,7 +241,7 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
 
   if sc:
     print('single coil')
-    model = ZS_Unrolled_Network(sImg, device, n=3)
+    model = ZS_Unrolled_Network(sImg, device, n=40)
   else:
     print('multi coil')
     sMaps = sMaps.to(device)
@@ -255,10 +272,11 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     oc = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( ks, axes=(-1,-2)),  axes=(-1,-2) ), axes=(-1,-2))
     plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( oc ) ), cmap='grey')
 
-  training_loop(training_kspace, val_kspace, val_mask, tl_masks,
-              model, math_utils.unrolled_loss_mixed_sc, sMaps, optimizer, dc, 
-              val_stop_training, num_epochs, device,
-              directory)
+  test_only_gd(sub_kspace, model, directory, torch.tensor(usMask > 0))
+  # training_loop(training_kspace, val_kspace, val_mask, tl_masks,
+  #             model, math_utils.unrolled_loss_sc, sMaps, optimizer, dc, 
+  #             val_stop_training, num_epochs, device,
+  #             directory)
 
 def test_sc():
   """
@@ -271,7 +289,7 @@ def test_sc():
   sMaps = data['smap']
   sMaps = sMaps / np.max(np.abs(sMaps))
 
-  results_dir = '/home/alex/Documents/research/mri/results/sc_test'
+  results_dir = '/home/alex/Documents/research/mri/results/sc_only_gd_test_330'
 
   im2 = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( kSpace, axes=(0,1)), axes=(0,1)), axes=(0,1))
   recon = utils.mri_reconRoemer(im2, sMaps)

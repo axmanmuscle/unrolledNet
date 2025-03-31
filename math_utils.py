@@ -188,10 +188,10 @@ def unrolled_loss_sc(output, target, mask):
   if target.shape[0] == 1:
     target = target.squeeze()
  
-  om = output[mask > 0]
-  tm = target[mask > 0]
+  om = output[..., mask > 0]
+  tm = target[..., mask > 0]
 
-  out = torch.norm(om.flatten() - tm.flatten()) / torch.norm(tm.flatten())
+  out = 0.5*torch.norm(om.flatten() - tm.flatten())**2 # / torch.norm(tm.flatten())
 
   del om, tm
   gc.collect()

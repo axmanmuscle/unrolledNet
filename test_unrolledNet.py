@@ -161,9 +161,12 @@ def main():
     # model = model.to(device)
     # print(summary(model, (1, 256, 256), device="cpu"))
     
-    model2 = ZS_Unrolled_Network(sMaps, sImg)
-    model2 = model2.to(device)
-    print(summary(model2, [(2, 1, 256, 256), mk2.shape, b.shape], dtypes=[torch.complex64, torch.bool, torch.complex64], device="cpu"))
+    # model2 = ZS_Unrolled_Network(sMaps, sImg)
+    # model2 = model2.to(device)
+    # print(summary(model2, [(2, 1, 256, 256), mk2.shape, b.shape], dtypes=[torch.complex64, torch.bool, torch.complex64], device="cpu"))
+
+    model3 = ZS_Unrolled_Network(sImg, device)
+    print(summary(model3, [(1, 1, 256, 256), mk2.shape, b.shape], dtypes=[torch.complex64, torch.bool, torch.complex64], device="cpu"))
 
 
     return 0
