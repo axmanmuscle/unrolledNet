@@ -230,11 +230,33 @@ class unrolled_block_sc(nn.Module):
         """
         i think A has to downselect here?
         """
-        xt = A(x) - b
-        xt = A(xt, 'transp')
-        # we need a step size here i think
-        x1 = x - xt
-        return x1
+        def obj(xi):
+           return 0.5 * torch.norm(A(x) - b)**2
+        
+        def grad(xi):
+            xt = A(xi) - b
+            xt = A(xt, 'transp')
+            return xt
+        
+        gx = grad(x)
+        gxNorm = torch.norm(gx.reshape(-1, 1))**2
+        alpha_bar = 1e-3 # TODO this may need to get changed
+        rho = 0.9
+        c = 0.9
+        max_linesearch_iters = 50
+        obj_x = obj(x)
+
+        linesearch_iter = 0
+        while linesearch_iter < max_linesearch_iters:
+            linesearch_iter += 1
+            xNew = x - alpha*gx
+            obj_xnew = obj(xNew)
+            if obj_xnew < obj_x - alpha * c * gxNorm:
+                break
+            alpha *= rho
+
+        print(f'grad_descent line search finished after {linesearch_iter} iters')
+        return xNew
     
     def prox(self, x, mask, b):
         """
