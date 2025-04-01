@@ -191,7 +191,7 @@ class unrolled_block_gd(nn.Module):
     unrolled block but its only gradient descent
     """
     def __init__(self, sMaps, shape, device):
-        super(unrolled_block, self).__init__()
+        super(unrolled_block_gd, self).__init__()
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
         self.device = device
@@ -233,7 +233,7 @@ class unrolled_block_gd(nn.Module):
         
         gx = grad(x)
         gxNorm = torch.norm(gx.reshape(-1, 1))**2
-        alpha = 1e-4 # TODO this may need to get changed
+        alpha = 1 # TODO this may need to get changed
         rho = 0.9
         c = 0.9
         max_linesearch_iters = 250

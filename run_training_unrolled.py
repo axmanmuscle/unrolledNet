@@ -189,8 +189,12 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
 
 def test_only_gd(ks, model, directory, mask):
 
-  x0 = torch.rand(ks.shape) + 1j * torch.rand(ks.shape)
-  x0 = x0.to(model.device)
+  # x0 = torch.rand(ks.shape) + 1j * torch.rand(ks.shape)
+  # x0 = x0.to(model.device)
+
+  ## multicoil only
+  x0 = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( ks, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
+
   ks = ks.to(model.device)
   mask = mask.to(model.device)
   out = model(x0, mask, ks)
@@ -243,7 +247,8 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
   else:
     print('multi coil')
     sMaps = sMaps.to(device)
-    model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
+    model = ZS_Unrolled_Network_gd(sImg, device,sMaps, 20) 
+    # model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
 
   model = model.to(device)
   optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
@@ -270,11 +275,56 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     oc = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( ks, axes=(-1,-2)),  axes=(-1,-2) ), axes=(-1,-2))
     plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( oc ) ), cmap='grey')
 
+  else:
+    oc = np.sum(np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( sub_kspace, axes=(2,3)),  axes=(2,3) ), axes=(2,3)), axis=-1)
+    plt.imsave(os.path.join(directory, 'zero_filled.png'), np.abs( np.squeeze( oc ) ), cmap='grey')
+    oc = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( ks, axes=(2,3)),  axes=(2,3) ), axes=(2,3))
+    im = utils.mri_reconRoemer(np.squeeze(oc), sMaps.numpy())
+    plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( im ) ), cmap='grey')
+
   test_only_gd(sub_kspace, model, directory, torch.tensor(usMask > 0))
   # training_loop(training_kspace, val_kspace, val_mask, tl_masks,
   #             model, math_utils.unrolled_loss_sc, sMaps, optimizer, dc, 
   #             val_stop_training, num_epochs, device,
   #             directory)
+
+def test_mc_gd():
+  rng = np.random.default_rng(20250313)
+  # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
+  data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
+  kSpace = data['d2']
+  kSpace = kSpace / np.max(np.abs(kSpace))
+  sMaps = data['smap']
+  sMaps = sMaps / np.max(np.abs(sMaps))
+
+  sImg = kSpace.shape[0:2]
+
+  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/mc_only_gd'
+  sMaps = torch.tensor(sMaps, dtype=torch.complex64)
+
+  kSpace2 = torch.zeros(1, *kSpace.shape, dtype=torch.complex64)
+  kSpace2[0, :, :] = torch.tensor(kSpace)
+  kSpace2 = kSpace2.unsqueeze(1)
+  
+
+  samp_fracs = [0.4, 0.25, 0.15, 0.1, 0.05]
+  train_fracs = [0.8]
+  train_loss_split_frac = 0.8
+  k_s = [50]
+  dcs = [True]
+  val_stop_trainings = [15]
+
+  for sf in samp_fracs:
+    for tf in train_fracs:
+      for k in k_s:
+        for vst in val_stop_trainings:
+          for dc in dcs:
+
+            run_training(kSpace2, sImg, sImg, sMaps, rng, 
+                      sf, tf, train_loss_split_frac, 
+                      k, dc, results_dir, vst, 50)
+  return 0
+
 
 def test_sc():
   """
@@ -290,7 +340,7 @@ def test_sc():
 
   # results_dir = '/home/alex/Documents/research/mri/results/sc_only_gd_test_330'
   results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/sc_only_gd'
-  im2 = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( kSpace, axes=(0,1)), axes=(0,1)), axes=(0,1))
+  im2 = np.fft.fftshift( np.fft.ifftn( np.fft.ifftshift( kSpace, axes=(0,1)), axes=(0,1)), axes=(0,1))
   recon = utils.mri_reconRoemer(im2, sMaps)
 
   ks_sc = np.fft.fftshift( np.fft.fftn( np.fft.ifftshift( recon, axes=(0,1)), axes=(0,1)), axes=(0,1))
@@ -372,4 +422,5 @@ def main():
   return 0
   
 if __name__ == "__main__":
-  test_sc()
+  test_mc_gd()
+  # test_sc()

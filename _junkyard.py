@@ -120,6 +120,16 @@ def test_ft():
     print(f'ip test 1: {np.abs(dp1 - dp1_me.item())}')
     print(f'ip test 2: {np.abs(dp2 - dp2_me.item())}')
 
+    fr1 = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( rx, dim=(0, 1) ), norm='ortho', dim=(0,1) ), dim=(0,1) )
+    fr2 = torch.fft.ifftshift( torch.fft.fftn( torch.fft.fftshift( rx, dim=(0, 1) ), norm='ortho', dim=(0,1) ), dim=(0,1) )
+
+    ifr1 = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( fr1, dim=(0, 1) ), norm='ortho', dim=(0,1) ), dim=(0,1) )
+    ifr2 = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( fr1, dim=(0, 1) ), norm='ortho', dim=(0,1) ), dim=(0,1) )
+
+    print(f'order test: {torch.norm(fr1 - fr1)}')
+    print(f'backward order test: {torch.norm(ifr1 - ifr2)}')
+
+
     print('hello')
 
 def test_ft2():
