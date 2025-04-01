@@ -11,7 +11,7 @@ import os
 import h5py
 import utils
 from tqdm import tqdm
-from zs_unrollednet import ZS_Unrolled_Network
+from zs_unrollednet import ZS_Unrolled_Network, ZS_Unrolled_Network_gd
 import matplotlib.pyplot as plt
 import scipy.io as sio
 import gc
@@ -189,7 +189,7 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
 
 def test_only_gd(ks, model, directory, mask):
 
-  x0 = torch.rand(ks.shape)
+  x0 = torch.rand(ks.shape) + 1j * torch.rand(ks.shape)
   x0 = x0.to(model.device)
   ks = ks.to(model.device)
   mask = mask.to(model.device)
@@ -201,8 +201,6 @@ def test_only_gd(ks, model, directory, mask):
   plt.imsave(os.path.join(directory, tstr), np.abs( oc ), cmap='grey')
 
   plt.clf()
-
-
 
 def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac, 
                  train_loss_split_frac, k, dc, results_dir,
@@ -241,7 +239,7 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
 
   if sc:
     print('single coil')
-    model = ZS_Unrolled_Network(sImg, device, n=40)
+    model = ZS_Unrolled_Network_gd(sImg, device, n=40)
   else:
     print('multi coil')
     sMaps = sMaps.to(device)
@@ -283,14 +281,15 @@ def test_sc():
   read in data and decide what to iterate over
   """
   rng = np.random.default_rng(20250313)
-  data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
+  # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
+  data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
   kSpace = data['d2']
   kSpace = kSpace / np.max(np.abs(kSpace))
   sMaps = data['smap']
   sMaps = sMaps / np.max(np.abs(sMaps))
 
-  results_dir = '/home/alex/Documents/research/mri/results/sc_only_gd_test_330'
-
+  # results_dir = '/home/alex/Documents/research/mri/results/sc_only_gd_test_330'
+  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/sc_only_gd'
   im2 = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( kSpace, axes=(0,1)), axes=(0,1)), axes=(0,1))
   recon = utils.mri_reconRoemer(im2, sMaps)
 
@@ -302,7 +301,7 @@ def test_sc():
   kSpace = ks_sc.unsqueeze(0)
   kSpace = kSpace.unsqueeze(0)
 
-  samp_fracs = [0.15, 0.1, 0.05]
+  samp_fracs = [0.4, 0.2, 0.15]
   train_fracs = [0.9]
   train_loss_split_frac = 0.85
   k_s = [50]

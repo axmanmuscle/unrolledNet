@@ -238,3 +238,93 @@ def view_im(kspace, title=''):
     if len(title) > 0:
         plt.title(title)
     plt.show()
+
+def test_adjoint(x0, f, ip = lambda x, y: np.vdot(x, y), num_test = 10):
+    """
+    test whether the adjoint of f is implemented correctly
+    f should be a function that takes in x0 and an optional parameter of either 'transp' or 'notransp'
+    ip is the inner product to use, this is really only for funky situations where you have a real scalar field etc.
+    """
+
+    fx0 = f(x0)
+    ftfx0 = f(fx0, 'transp')
+    rng = np.random.default_rng(20250303)
+
+    error = 0
+
+    dataComplex = False
+    if np.any(x0.imag):
+        dataComplex = True
+
+
+    for _ in range(num_test):
+        y1 = rng.normal(size=x0.shape)
+        y2 = rng.normal(size=fx0.shape)
+
+        if dataComplex:
+            y1 = y1 + 1j * rng.normal(size=x0.shape)
+            y2 = y2 + 1j * rng.normal(size=fx0.shape)
+
+        fy1 = f(y1)
+        fty2 = f(y2, 'transp')
+        
+        t1 = ip(y1, fty2)
+        t2 = ip(fy1, y2)
+
+        error += np.abs(t1 - t2)
+
+    error /= num_test
+    assert error < 1e-8, "adjoint test failed"
+
+def test_adjoint_torch(x0, f, ip = lambda x, y: torch.real(torch.vdot(x.flatten(), y.flatten())), num_test = 10):
+    """
+    test whether the adjoint of f is implemented correctly
+    f should be a function that takes in x0 and an optional parameter of either 'transp' or 'notransp'
+    ip is the inner product to use, this is really only for funky situations where you have a real scalar field etc.
+    """
+
+    fx0 = f(x0)
+    ftfx0 = f(fx0, 'transp')
+    rng = torch.Generator()
+    rng.manual_seed(20250332)
+    tol = 1e-8
+
+    error = torch.tensor([0])
+
+    dataComplex = False
+    if torch.is_complex(x0):
+        dataComplex = True
+
+
+    for _ in range(num_test):
+        # y1 = torch.normal(mean=0, std=1, size=x0.shape, generator=rng)
+        # y2 = torch.normal(mean=0, std=1, size=fx0.shape, generator=rng)
+
+        # if dataComplex:
+        #     y1 = y1 + 1j * torch.normal(mean=0, std=1, size=x0.shape, generator=rng)
+        #     y2 = y2 + 1j * torch.normal(mean=0, std=1, size=fx0.shape, generator=rng)
+
+        if dataComplex:
+            y1 = torch.randn_like(x0, dtype=torch.complex128)
+            y2 = torch.randn_like(fx0, dtype=torch.complex128)
+        else:
+            y1 = torch.randn_like(x0, dtype=torch.float64)
+            y2 = torch.randn_like(fx0, dtype=torch.float64)
+
+        fy1 = f(y1)
+        fty2 = f(y2, 'transp')
+        
+        t1 = ip(y1, fty2)
+        t2 = ip(fy1, y2)
+
+        tmperr = torch.abs(t1 - t2)
+
+        if torch.abs(t1) > 0.1 * tol:
+            tmperr /= torch.abs(t1)
+
+        error = torch.max(error, tmperr)
+
+    if error > 1e-8:
+        print("adjoint test failed")
+
+    return error
