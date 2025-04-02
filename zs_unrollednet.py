@@ -115,7 +115,7 @@ class unrolled_block(nn.Module):
                 break
             alpha *= rho
 
-        print(f'grad_descent line search finished after {linesearch_iter} iters')
+        # print(f'grad_descent line search finished after {linesearch_iter} iters')
         return xNew
     
     def prox(self, x, mask, b):

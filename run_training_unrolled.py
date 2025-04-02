@@ -138,20 +138,22 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
     # save images at each epoch
     if sc:
       all_im = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
-      out = model(all_im, alldata_mask, alldata_consistency)
-      tstr = f'output_epoch{ep}.png'
+    else:
+      all_im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
+    out = model(all_im, alldata_mask, alldata_consistency)
+    tstr = f'output_epoch{ep}.png'
 
-      out = out.cpu()
-      oc = np.squeeze(out.detach().numpy())
-      img_dir = os.path.join(directory, 'imgs/')
+    out = out.cpu()
+    oc = np.squeeze(out.detach().numpy())
+    img_dir = os.path.join(directory, 'imgs/')
 
-      if not os.path.isdir(img_dir):
-        os.mkdir(img_dir)
-      plt.imsave(os.path.join(img_dir, tstr), np.abs( oc ), cmap='grey')
+    if not os.path.isdir(img_dir):
+      os.mkdir(img_dir)
+    plt.imsave(os.path.join(img_dir, tstr), np.abs( oc ), cmap='grey')
 
-      plt.clf()
-      del all_im, out, oc
-      gc.collect()
+    plt.clf()
+    del all_im, out, oc
+    gc.collect()
 
   plt.plot(tl_ar)
   plt.plot(vl_ar)
@@ -279,12 +281,12 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     oc = np.sum(np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( sub_kspace, axes=(2,3)),  axes=(2,3) ), axes=(2,3)), axis=-1)
     plt.imsave(os.path.join(directory, 'zero_filled.png'), np.abs( np.squeeze( oc ) ), cmap='grey')
     oc = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( ks, axes=(2,3)),  axes=(2,3) ), axes=(2,3))
-    im = utils.mri_reconRoemer(np.squeeze(oc), sMaps.numpy())
+    im = utils.mri_reconRoemer(np.squeeze(oc), sMaps.cpu().numpy())
     plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( im ) ), cmap='grey')
 
   # test_only_gd(sub_kspace, model, directory, torch.tensor(usMask > 0))
   training_loop(training_kspace, val_kspace, val_mask, tl_masks,
-              model, math_utils.unrolled_loss_sc, sMaps, optimizer, dc, 
+              model, math_utils.unrolled_loss_mixed, sMaps, optimizer, dc, 
               val_stop_training, num_epochs, device,
               directory)
 
@@ -383,7 +385,7 @@ def main():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/home/alex/Documents/research/mri/results/318_tests'
+  results_dir = '/home/alex/Documents/research/mri/results/401_tests'
 
   # mask = vdSampleMask(kSpace.shape[0:2], [30, 30], np.round(np.prod(kSpace.shape[0:2]) * 0.4))
   # us_kSpace = kSpace*mask[:, :, np.newaxis]
@@ -403,10 +405,10 @@ def main():
   # us_kSpace[~mask] = 0
   # ks = torch.tensor(us_kSpace)
 
-  samp_fracs = [0.25]
-  train_fracs = [0.8]
+  samp_fracs = [0.25, 0.2, 0.1, 0.08]
+  train_fracs = [0.9, 0.8]
   train_loss_split_frac = 0.8
-  k_s = [50]
+  k_s = [25, 50]
   dcs = [True]
   val_stop_trainings = [15]
 
@@ -422,5 +424,6 @@ def main():
   return 0
   
 if __name__ == "__main__":
-  test_mc_gd()
+  main()
+  # test_mc_gd()
   # test_sc()
