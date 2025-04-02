@@ -45,7 +45,7 @@ class prox_block(nn.Module):
         else:
           out[mask] = b[mask]
 
-        out = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+        out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
         out = torch.sum( torch.conj(sm) * out, -1 ) #roemer
 
         #out = torch.view_as_real(out)
@@ -81,7 +81,7 @@ class unrolled_block(nn.Module):
 
     def applyF(self, x, op='notransp'):
         if op == 'transp':
-            out = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( x, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+            out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( x, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
         else:
             out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( x, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
         return out
@@ -90,10 +90,33 @@ class unrolled_block(nn.Module):
         """
         i think A has to downselect here?
         """
-        xt = A(x) - b
-        xt = A(xt, 'transp')
-        x1 = x - xt
-        return x1
+        def obj(xi):
+           return 0.5 * torch.norm(A(xi) - b)**2
+        
+        def grad(xi):
+            xt = A(xi) - b
+            xt = A(xt, 'transp')
+            return xt
+        
+        gx = grad(x)
+        gxNorm = torch.norm(gx.reshape(-1, 1))**2
+        alpha = 1 # TODO this may need to get changed
+        rho = 0.9
+        c = 0.9
+        max_linesearch_iters = 250
+        obj_x = obj(x)
+
+        linesearch_iter = 0
+        while linesearch_iter < max_linesearch_iters:
+            linesearch_iter += 1
+            xNew = x - alpha*gx
+            obj_xnew = obj(xNew)
+            if obj_xnew < obj_x - alpha * c * gxNorm:
+                break
+            alpha *= rho
+
+        print(f'grad_descent line search finished after {linesearch_iter} iters')
+        return xNew
     
     def prox(self, x, mask, b):
         """
@@ -110,6 +133,7 @@ class unrolled_block(nn.Module):
             sm = self.sMaps
         for i in range(self.nCoils):
             out[...,i] = sm[...,i] * x
+
         out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
                                                  dim = (2,3) ), dim=(2,3) )
 
@@ -118,7 +142,8 @@ class unrolled_block(nn.Module):
         else:
           out[mask] = b[mask]
         
-        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
+        # should this fourier transform be here? I don't think so
+        out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
                                                  dim = (2,3) ), dim=(2,3) )
         out = torch.sum( torch.conj(sm) * out, -1 ) #roemer
 

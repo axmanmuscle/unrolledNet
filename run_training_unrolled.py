@@ -247,8 +247,8 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
   else:
     print('multi coil')
     sMaps = sMaps.to(device)
-    model = ZS_Unrolled_Network_gd(sImg, device,sMaps, 20) 
-    # model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
+    # model = ZS_Unrolled_Network_gd(sImg, device,sMaps, 20) 
+    model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
 
   model = model.to(device)
   optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
@@ -282,11 +282,11 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     im = utils.mri_reconRoemer(np.squeeze(oc), sMaps.numpy())
     plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( im ) ), cmap='grey')
 
-  test_only_gd(sub_kspace, model, directory, torch.tensor(usMask > 0))
-  # training_loop(training_kspace, val_kspace, val_mask, tl_masks,
-  #             model, math_utils.unrolled_loss_sc, sMaps, optimizer, dc, 
-  #             val_stop_training, num_epochs, device,
-  #             directory)
+  # test_only_gd(sub_kspace, model, directory, torch.tensor(usMask > 0))
+  training_loop(training_kspace, val_kspace, val_mask, tl_masks,
+              model, math_utils.unrolled_loss_sc, sMaps, optimizer, dc, 
+              val_stop_training, num_epochs, device,
+              directory)
 
 def test_mc_gd():
   rng = np.random.default_rng(20250313)
@@ -299,7 +299,7 @@ def test_mc_gd():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/mc_only_gd'
+  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/mc_41'
   sMaps = torch.tensor(sMaps, dtype=torch.complex64)
 
   kSpace2 = torch.zeros(1, *kSpace.shape, dtype=torch.complex64)
