@@ -386,7 +386,7 @@ def upsample2(img, U):
     xqs = S[1] + torch.arange(0, sImg[1])*U[1]
 
     size = [sOut[i].item() for i in range(sOut.numel())]
-    out = torch.zeros(size, dtype=img.dtype)
+    out = torch.zeros(size, dtype=img.dtype, device=img.device)
     out[torch.meshgrid(yqs, xqs, indexing='ij')] = img
 
     return out
@@ -463,22 +463,22 @@ def wtDaubechies2( img, split = torch.tensor([1]) ):
         s22 = split[sSplit[1]//2+1:, sSplit[1]//2+1:]
 
         if s11.sum() > 0:
-            if torch.any(torch.remainder(wt11.shape, 2)):
+            if torch.any(torch.remainder(torch.tensor(wt11.shape), 2)):
                 raise ValueError('wt11 is invalid shape')
             wt11 = wtDaubechies2(wt11, s11)
 
         if s12.sum() > 0:
-            if torch.any(torch.remainder(wt12.shape, 2)):
+            if torch.any(torch.remainder(torch.tensor(wt12.shape), 2)):
                 raise ValueError('wt12 is invalid shape')
             wt12 = wtDaubechies2(wt12, s12)
 
         if s21.sum() > 0:
-            if torch.any(torch.remainder(wt21.shape, 2)):
+            if torch.any(torch.remainder(torch.tensor(wt21.shape), 2)):
                 raise ValueError('wt21 is invalid shape')
             wt21 = wtDaubechies2(wt21, s21)
 
         if s22.sum() > 0:
-            if torch.any(torch.remainder(wt22.shape, 2)):
+            if torch.any(torch.remainder(torch.tensor(wt22.shape), 2)):
                 raise ValueError('wt22 is invalid shape')
             wt22 = wtDaubechies2(wt22, s22)
 
@@ -514,19 +514,19 @@ def iwtDaubechies2(wt, split = torch.tensor([1])):
         s22 = split[sSplit[1]//2:, sSplit[1]//2:]
 
         if s11.sum() > 0:
-            if torch.any(torch.remainder(wt11.shape, 2)):
+            if torch.any(torch.remainder(torch.tensor(wt11.shape), 2)):
                 raise ValueError('wt11 is invalid shape')
             wt11 = iwtDaubechies2(wt11, s11)
         if s12.sum() > 0:
-            if torch.any(torch.remainder(wt12.shape, 2)):
+            if torch.any(torch.remainder(torch.tensor(wt12.shape), 2)):
                 raise ValueError('wt12 is invalid shape')
             wt12 = iwtDaubechies2(wt12, s12)
         if s21.sum() > 0:
-            if torch.any(torch.remainder(wt21.shape, 2)):
+            if torch.any(torch.remainder(torch.tensor(wt21.shape), 2)):
                 raise ValueError('wt21 is invalid shape')
             wt21 = iwtDaubechies2(wt21, s21)
         if s22.sum() > 0:
-            if torch.any(torch.remainder(wt22.shape, 2)):
+            if torch.any(torch.remainder(torch.tensor(wt22.shape), 2)):
                 raise ValueError('wt22 is invalid shape')
             wt22 = iwtDaubechies2(wt22, s22)
     

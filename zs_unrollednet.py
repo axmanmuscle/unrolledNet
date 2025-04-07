@@ -6,7 +6,7 @@ we need to _not_ have a monolithic A operator
 import torch
 import torch.nn as nn
 import numpy as np
-from unet import build_unet
+from unet import build_unet ,build_unet_small
 from torchsummary import summary
 import gc
 import utils
@@ -38,6 +38,54 @@ class prox_block(nn.Module):
 
         for i in range(self.nCoils):
             out[...,i] = sm[...,i] * x
+        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+
+        if len(mask.shape) < 3:
+          out[..., mask, :] = b[..., mask, :]
+        else:
+          out[mask] = b[mask]
+
+        out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+        out = torch.sum( torch.conj(sm) * out, -1 ) #roemer
+
+        #out = torch.view_as_real(out)
+
+        return out
+
+class prox_block_wav(nn.Module):
+    """
+    just a module for the proximal block
+    """
+
+    def __init__(self, sMaps, device, wavSplit):
+        super(prox_block_wav, self).__init__()
+        self.device = device
+        self.sMaps = sMaps
+        self.nCoils = sMaps.shape[-1]
+        self.wavSplit = wavSplit
+
+    def forward(self, inputs):
+        """
+        forward method for prox block
+        simply to do a proximal step at the very end for data consistency
+        """
+        x, mask, b = inputs
+
+        # wavelet coefficients to image space
+        x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
+
+        x = x[None, None, :, :]
+
+        out = torch.zeros(size = [*x.shape, self.nCoils], dtype=self.sMaps.dtype, device = self.device)
+
+        if len(x.shape) == 4:
+            sm = self.sMaps.unsqueeze(0)
+        else:
+            sm = self.sMaps
+
+        for i in range(self.nCoils):
+            out[...,i] = sm[...,i] * x
+
         out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
 
         if len(mask.shape) < 3:
@@ -217,21 +265,26 @@ class unrolled_block_wav(nn.Module):
     I might need to actually make that
     """
     def __init__(self, sMaps, shape, wavSplit, device):
-        super(unrolled_block, self).__init__()
+        super(unrolled_block_wav, self).__init__()
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
         self.device = device
-        self.nn = build_unet(shape[1])
+        self.nn = build_unet_small(shape[1])
         self.wavSplit = wavSplit
 
     def applyW(self, x, op='notransp'):
         """
         wavelet transform here
+        going to assume that x is [1, 1, *sImg]
         """
+        out = torch.zeros_like(x)
         if op == 'transp':
-            out = math_utils.iwtDaubechies2(x, self.wavSplit)
+            out[..., :, :] = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
         else: 
-            out = math_utils.wtDaubechies2(x, self.wavSplit)
+            out[..., :, :] = math_utils.wtDaubechies2(torch.squeeze(x), self.wavSplit)
+
+        del x
+        gc.collect()
         
         return out
     
@@ -271,7 +324,7 @@ class unrolled_block_wav(nn.Module):
         
         gx = grad(x)
         gxNorm = torch.norm(gx.reshape(-1, 1))**2
-        alpha = 1 # TODO this may need to get changed
+        alpha = 1e-4 # TODO this may need to get changed
         rho = 0.9
         c = 0.9
         max_linesearch_iters = 250
@@ -286,7 +339,7 @@ class unrolled_block_wav(nn.Module):
                 break
             alpha *= rho
 
-        # print(f'grad_descent line search finished after {linesearch_iter} iters')
+        print(f'grad_descent line search finished after {linesearch_iter} iters')
         return xNew
     
     def prox(self, x, mask, b):
@@ -313,9 +366,9 @@ class unrolled_block_wav(nn.Module):
         else:
           out[mask] = b[mask]
         
-        # should this fourier transform be here? I don't think so
         out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
                                                  dim = (2,3) ), dim=(2,3) )
+
         out = torch.sum( torch.conj(sm) * out, -1 ) #roemer
 
         return out
@@ -785,10 +838,10 @@ class ZS_Unrolled_Network_gd(nn.Module):
 
 class ZS_Unrolled_Network_wavelets(nn.Module):
     def __init__(self, sImg, device, sMaps=[], n=10):
-        super(ZS_Unrolled_Network, self).__init__()
+        super(ZS_Unrolled_Network_wavelets, self).__init__()
         self.n = n
         self.device = device
-        self.wavSplit = math_utils.makeWavSplit(sImg)
+        self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
         mod = []
         if len(sMaps) == 0: # single coil
             assert False, 'single coil not implemented for wavelets yet'
@@ -797,8 +850,8 @@ class ZS_Unrolled_Network_wavelets(nn.Module):
             mod.append(prox_block_sc(device))
         else: # multicoil
             for i in range(n):
-                mod.append(unrolled_block_wav(sMaps, sImg, device))
-            mod.append(prox_block(sMaps, device))
+                mod.append(unrolled_block_wav(sMaps, sImg, self.wavSplit, device))
+            mod.append(prox_block_wav(sMaps, device, self.wavSplit))
 
         self.model = nn.Sequential(*mod)
 

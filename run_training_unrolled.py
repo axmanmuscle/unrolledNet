@@ -11,7 +11,7 @@ import os
 import h5py
 import utils
 from tqdm import tqdm
-from zs_unrollednet import ZS_Unrolled_Network, ZS_Unrolled_Network_gd
+from zs_unrollednet import ZS_Unrolled_Network, ZS_Unrolled_Network_gd, ZS_Unrolled_Network_wavelets
 import matplotlib.pyplot as plt
 import scipy.io as sio
 import gc
@@ -242,6 +242,7 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
   val_mask = torch.tensor(val_mask)
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+  wavelets = True
 
   if sc:
     print('single coil')
@@ -249,8 +250,10 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
   else:
     print('multi coil')
     sMaps = sMaps.to(device)
+    if wavelets:
+      model = ZS_Unrolled_Network_wavelets(sImg, device, sMaps, 2)
     # model = ZS_Unrolled_Network_gd(sImg, device,sMaps, 20) 
-    model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
+    # model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
 
   model = model.to(device)
   optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
@@ -292,8 +295,8 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
 
 def test_mc_gd():
   rng = np.random.default_rng(20250313)
-  # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
-  data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
+  data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
+  # data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
   kSpace = data['d2']
   kSpace = kSpace / np.max(np.abs(kSpace))
   sMaps = data['smap']
@@ -301,7 +304,8 @@ def test_mc_gd():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/mc_41'
+  # results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/mc_41'
+  results_dir = '/home/alex/Documents/research/mri/results/426_wavtests'
   sMaps = torch.tensor(sMaps, dtype=torch.complex64)
 
   kSpace2 = torch.zeros(1, *kSpace.shape, dtype=torch.complex64)
@@ -385,7 +389,7 @@ def main():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/home/alex/Documents/research/mri/results/401_tests'
+  results_dir = '/home/alex/Documents/research/mri/results/426_wavtests'
 
   # mask = vdSampleMask(kSpace.shape[0:2], [30, 30], np.round(np.prod(kSpace.shape[0:2]) * 0.4))
   # us_kSpace = kSpace*mask[:, :, np.newaxis]
