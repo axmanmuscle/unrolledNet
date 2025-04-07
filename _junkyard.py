@@ -132,6 +132,27 @@ def test_ft():
 
     print('hello')
 
+class superTest():
+    def __init__(self, a):
+        self.a = a
+        self.asq = a**2
+
+class subTest(superTest):
+    def __init__(self, a, b):
+        super().__init__(a)
+        self.b = b
+        self.bsq = b**2
+
+def classTest():
+    a = 15
+    b = 25
+
+    testClass = subTest(a, b)
+    print(issubclass(subTest, superTest))
+    print(testClass.a)
+    print(testClass.asq)
+    print(testClass.b)
+
 def test_ft2():
     """
     so the rest of the code sits in a junkyard
@@ -166,4 +187,5 @@ def test_ft2():
 
 
 if __name__ == "__main__":
-    test_ft()
+    classTest()
+    # test_ft()

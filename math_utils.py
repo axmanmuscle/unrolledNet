@@ -328,3 +328,261 @@ def test_adjoint_torch(x0, f, ip = lambda x, y: torch.real(torch.vdot(x.flatten(
         print("adjoint test failed")
 
     return error
+
+def makeWavSplit(sImg, minSplitSize=16):
+    """
+    make the split to be used iwht the wavelet transforms
+    INPUTS:
+        sImg - size of the image as a tuple or list
+        (OPTIONAL) minSplitSize - minimum size of split, default 16
+    """
+
+    def findNPows(sizeDim, minSplitSize):
+        binPow = np.log2(sizeDim)
+
+        nPow = 0
+        for powIdx in range(np.floor(binPow).astype(int)):
+            if sizeDim % 2 == 0 and sizeDim/2 >= minSplitSize:
+                nPow += 1
+                sizeDim = sizeDim/2
+            else:
+                break
+        
+        return nPow
+
+    nDims = len(sImg)
+    nPows = np.zeros(shape=(1, nDims))
+
+    if np.size(minSplitSize) == 1:
+        minSplitSize = minSplitSize * np.ones(shape=(nDims, 1))
+
+    for dimIdx in range(nDims):
+        nPows[0, dimIdx] = findNPows( sImg[dimIdx], minSplitSize[dimIdx, 0])
+
+    if nDims == 1:
+        wavSplit = np.zeros(shape=(2**(nPows-1), 1))
+    else:
+        wavSplit = np.zeros(*np.power(2, nPows-1).astype(int))
+
+    wavSplit[0, 0] = 1
+
+    sWavSplit = wavSplit.shape
+    wavSplit = wavSplit[0:np.min(sWavSplit), 0:np.min(sWavSplit)]
+
+    return wavSplit
+
+def upsample2(img, U):
+    """
+    only implementing the forward method for right now
+    """
+
+    sImg = img.shape
+    ndims = len(sImg)
+    S = np.zeros((ndims, 1), dtype=np.int64)
+
+    sOut = np.array(sImg) * np.array(U) # this might be fragile
+
+    yqs = S[0] + np.arange(0, sImg[0])*U[0]
+    xqs = S[1] + np.arange(0, sImg[1])*U[1]
+
+    out = np.zeros(sOut, dtype=img.dtype)
+    out[np.ix_(yqs, xqs)] = img
+
+    return out
+
+def wtDaubechies2( img, split = np.array([1]) ):
+    """
+    applies the 2 dimensional Daubechies 4 wavelet transform
+    INPUTS:
+        img - 2d img
+        split - (OPTIONAL) describes the way to split
+    """
+    sSplit = split.shape
+
+    imgrt3 = np.sqrt(3) * img
+    img3 = 3 * img
+
+    imgPimgrt3 = img + imgrt3
+    img3Pimgrt3 = img3 + imgrt3
+    imgMimgrt3 = img - imgrt3
+    img3Mimgrt3 = img3 - imgrt3
+
+    wt1 = imgMimgrt3 + np.roll(img3Mimgrt3, -1, axis=0) \
+                     + np.roll(img3Pimgrt3, -2, axis=0) \
+                     + np.roll(imgPimgrt3, -3, axis=0)
+    wt1 = wt1[::2, :]
+
+    wt1rt3 = wt1 * np.sqrt(3)
+    wt13 = wt1 * 3
+
+    wt1Pwt1rt3 = wt1 + wt1rt3
+    wt13Pwt1rt3 = wt13 + wt1rt3
+    wt1Mwt1rt3 = wt1 - wt1rt3
+    wt13Mwt1rt3 = wt13 - wt1rt3
+
+    wt11 = wt1Mwt1rt3 + np.roll(wt13Mwt1rt3, [0, -1], axis=[0, 1]) \
+                      + np.roll(wt13Pwt1rt3, [0, -2], axis=[0, 1]) \
+                      + np.roll(wt1Pwt1rt3, [0, -3], axis=[0, 1])
+    
+    wt11 = wt11[:, ::2]
+
+    wt12 = -1*wt1Pwt1rt3 + np.roll(wt13Pwt1rt3, [0, -1], axis=[0, 1]) \
+                         + np.roll(-1*wt13Mwt1rt3, [0, -2], axis=[0, 1]) \
+                         + np.roll(wt1Mwt1rt3, [0, -3], axis=[0, 1])
+    wt12 = wt12[:, ::2]
+
+    wt2 = -1*imgPimgrt3 + np.roll(img3Pimgrt3, [-1, 0], axis=[0, 1]) \
+                        + np.roll(-1*img3Mimgrt3, [-2, 0], axis=[0, 1]) \
+                        + np.roll(imgMimgrt3, [-3, 0], axis=[0, 1])
+    wt2 = wt2[::2, :]
+
+    wt2rt3 = wt2 * np.sqrt(3)
+    wt23 = wt2 * 3
+
+    wt2Pwt2rt3 = wt2 + wt2rt3
+    wt23Pwt2rt3 = wt23 + wt2rt3
+    wt2Mwt2rt3 = wt2 - wt2rt3
+    wt23Mwt2rt3 = wt23 - wt2rt3
+
+    wt21 = wt2Mwt2rt3 + np.roll(wt23Mwt2rt3, [0, -1], axis=[0, 1]) \
+                      + np.roll(wt23Pwt2rt3, [0, -2], axis=[0, 1]) \
+                      + np.roll(wt2Pwt2rt3, [0, -3], axis=[0, 1])
+    wt21 = wt21[:, ::2]
+
+    wt22 = -1*wt2Pwt2rt3 + np.roll(wt23Pwt2rt3, [0, -1], axis=[0, 1]) \
+                         + np.roll(-1*wt23Mwt2rt3, [0, -2], axis=[0, 1]) \
+                         + np.roll(wt2Mwt2rt3, [0, -3], axis=[0, 1])
+    wt22 = wt22[:, ::2]
+
+    nSplit = split.size
+    if nSplit > 1:
+        s11 = split[0:sSplit[0]//2,0:sSplit[1]//2]
+        s12 = split[0:sSplit[0]//2, sSplit[1]//2+1:]
+        s21 = split[sSplit[1]//2+1:, 0:sSplit[0]//2]
+        s22 = split[sSplit[1]//2+1:, sSplit[1]//2+1:]
+
+        if s11.sum() > 0:
+            if np.any(np.mod(wt11.shape, 2)):
+                raise ValueError('wt11 is invalid shape')
+            wt11 = wtDaubechies2(wt11, s11)
+
+        if s12.sum() > 0:
+            if np.any(np.mod(wt12.shape, 2)):
+                raise ValueError('wt12 is invalid shape')
+            wt12 = wtDaubechies2(wt12, s12)
+
+        if s21.sum() > 0:
+            if np.any(np.mod(wt21.shape, 2)):
+                raise ValueError('wt21 is invalid shape')
+            wt21 = wtDaubechies2(wt21, s21)
+
+        if s22.sum() > 0:
+            if np.any(np.mod(wt22.shape, 2)):
+                raise ValueError('wt22 is invalid shape')
+            wt22 = wtDaubechies2(wt22, s22)
+
+
+    a1 = np.concatenate([wt11, wt12], axis=1)
+    a2 = np.concatenate([wt21, wt22], axis=1)
+    wt = np.concatenate([a1, a2], axis=0)
+
+    wt /= 32
+
+    return wt
+
+def iwtDaubechies2(wt, split = np.array([1])):
+    """
+    inverse Daubechies wavelet transformation
+    """
+
+    sWT = wt.shape
+    ## TODO check that the sizes are divisible by two?
+    wt11 = wt[:sWT[0]//2, :sWT[1]//2]
+    wt21 = wt[sWT[0]//2:, :sWT[1]//2]
+    wt12 = wt[:sWT[0]//2, sWT[1]//2:]
+    wt22 = wt[sWT[0]//2:, sWT[1]//2:]
+
+    sSplit = split.shape
+    if np.max( np.mod( np.log2( sSplit), 1) ) > 0:
+        raise ValueError('something in the split is the wrong size')
+    nSplit = split.size
+    if nSplit > 1:
+        s11 = split[:sSplit[0]//2, :sSplit[1]//2]
+        s12 = split[:sSplit[0]//2, sSplit[1]//2:]
+        s21 = split[sSplit[1]//2:, :sSplit[0]//2]
+        s22 = split[sSplit[1]//2:, sSplit[1]//2:]
+
+        if s11.sum() > 0:
+            if np.any(np.mod(wt11.shape, 2)):
+                raise ValueError('wt11 is invalid shape')
+            wt11 = iwtDaubechies2(wt11, s11)
+        if s12.sum() > 0:
+            if np.any(np.mod(wt12.shape, 2)):
+                raise ValueError('wt12 is invalid shape')
+            wt12 = iwtDaubechies2(wt12, s12)
+        if s21.sum() > 0:
+            if np.any(np.mod(wt21.shape, 2)):
+                raise ValueError('wt21 is invalid shape')
+            wt21 = iwtDaubechies2(wt21, s21)
+        if s22.sum() > 0:
+            if np.any(np.mod(wt22.shape, 2)):
+                raise ValueError('wt22 is invalid shape')
+            wt22 = iwtDaubechies2(wt22, s22)
+    
+    ## todo: write upsample
+    tmp = upsample2(wt11, [1, 2])
+
+    tmp3 = 3 * tmp
+    tmprt3 = np.sqrt(3) * tmp
+
+    wt1_1 = tmp - tmprt3 + np.roll(tmp3 - tmprt3, [0, 1], axis = [0, 1]) \
+                         + np.roll( tmp3 + tmprt3, [0, 2], axis=[0, 1]) \
+                         + np.roll(tmp + tmprt3, [0, 3], axis = [0, 1])
+    
+    tmp = upsample2(wt12, [1, 2])
+    tmp3 = 3 * tmp
+    tmprt3 = np.sqrt(3) * tmp
+
+    wt1_2 = -1 * (tmp + tmprt3) + np.roll(tmp3 + tmprt3, [0, 1], axis = [0, 1]) \
+                                + np.roll( -1 * (tmp3 - tmprt3), [0, 2], axis=[0, 1]) \
+                                + np.roll(tmp - tmprt3, [0, 3], axis = [0, 1])
+    
+    wt1 = upsample2( wt1_1 + wt1_2, [2, 1])
+    
+    tmp = upsample2(wt21, [1, 2])
+    tmp3 = 3 * tmp
+    tmprt3 = np.sqrt(3) * tmp
+
+    wt2_1 = tmp - tmprt3 + np.roll(tmp3 - tmprt3, [0, 1], axis = [0, 1]) \
+                         + np.roll(tmp3 + tmprt3, [0, 2], axis=[0, 1]) \
+                         + np.roll(tmp + tmprt3, [0, 3], axis = [0, 1])
+    
+    tmp = upsample2( wt22, [1, 2])
+    tmp3 = 3 * tmp
+    tmprt3 = np.sqrt(3) * tmp
+
+    wt2_2 = -1 * (tmp + tmprt3) + np.roll(tmp3 + tmprt3, [0, 1], axis = [0, 1]) \
+                                + np.roll(-1 * (tmp3 - tmprt3), [0, 2], axis=[0, 1]) \
+                                + np.roll(tmp - tmprt3, [0, 3], axis = [0, 1])
+    
+    wt2 = upsample2( wt2_1 + wt2_2, [2, 1])
+
+    tmp = wt1
+    tmp3 = 3 * tmp
+    tmprt3 = np.sqrt(3) * tmp
+
+    sig1 = tmp - tmprt3 + np.roll( tmp3 - tmprt3, [1, 0], axis = [0, 1]) \
+                       + np.roll( tmp3 + tmprt3, [2, 0], axis = [0, 1]) \
+                       + np.roll( tmp + tmprt3, [3, 0], axis = [0, 1])
+    
+    tmp = wt2
+    tmp3 = 3 * tmp
+    tmprt3 = np.sqrt(3) * tmp
+
+    sig2 = -1*(tmp + tmprt3) + np.roll(tmp3 + tmprt3, [1, 0], axis = [0, 1]) \
+                             + np.roll( -1*( tmp3 - tmprt3), [2, 0], axis = [0, 1]) \
+                             + np.roll( tmp - tmprt3, [3, 0], axis = [0, 1])
+    
+    img = (sig1 + sig2) / 32
+
+    return img

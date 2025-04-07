@@ -18,3 +18,6 @@ Need to get the hooks on so this can train zero shot self supervised style
 
  ## 320
  Change to VD sampling mask
+
+ ## 41
+ This seems to be working with the gradient line search - although now we need to add wavelets (yayyyyyy)
