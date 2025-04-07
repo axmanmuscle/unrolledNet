@@ -305,8 +305,10 @@ def test_adjoint_torch(x0, f, ip = lambda x, y: torch.real(torch.vdot(x.flatten(
         #     y2 = y2 + 1j * torch.normal(mean=0, std=1, size=fx0.shape, generator=rng)
 
         if dataComplex:
-            y1 = torch.randn_like(x0, dtype=torch.complex128)
-            y2 = torch.randn_like(fx0, dtype=torch.complex128)
+            y1 = torch.randn(size=x0.shape, dtype=x0.dtype) + 1j*torch.randn(size=x0.shape, dtype=x0.dtype)
+            y2 = torch.randn(size=fx0.shape, dtype=fx0.dtype) + 1j*torch.randn(size=fx0.shape, dtype=fx0.dtype)
+            # y1 = torch.randn_like(x0, dtype=x0.dtype)
+            # y2 = torch.randn_like(fx0, dtype=x0.dtype)
         else:
             y1 = torch.randn_like(x0, dtype=torch.float64)
             y2 = torch.randn_like(fx0, dtype=torch.float64)

@@ -413,7 +413,79 @@ class unrolled_block_wav(nn.Module):
             out = applyM(out)
 
           return out
+        
+        def applyA_t0(x, op='notransp'):
+          if op == 'transp':
+            # out = applyM(x)
+            # # apply f transpose
+            # out = self.applyF(out, 'transp')
+            # apply S transpose
+            # out = self.applyS(out, 'transp')
+            # wavelet transform
+            out = self.applyW(x)
+            
+          else:
+            # inverse wavelet transform
+            out = self.applyW(x, 'transp')
+            # apply S
+            # out = self.applyS(x)
+            # # apply f
+            # out = self.applyF(out)
+            # # apply mask
+            # out = applyM(out)
 
+          return out
+        
+        def applyA_t1(x, op='notransp'):
+          if op == 'transp':
+            # out = applyM(x)
+            # # apply f transpose
+            # out = self.applyF(out, 'transp')
+            # apply S transpose
+            out = self.applyS(x, 'transp')
+            # wavelet transform
+            out = self.applyW(out)
+            
+          else:
+            # inverse wavelet transform
+            out = self.applyW(x, 'transp')
+            # apply S
+            out = self.applyS(x)
+            # # apply f
+            # out = self.applyF(out)
+            # # apply mask
+            # out = applyM(out)
+
+          return out
+        
+        def applyA_t2(x, op='notransp'):
+          if op == 'transp':
+            # out = applyM(x)
+            # apply f transpose
+            out = self.applyF(x, 'transp')
+            # apply S transpose
+            out = self.applyS(out, 'transp')
+            # wavelet transform
+            out = self.applyW(out)
+            
+          else:
+            # inverse wavelet transform
+            out = self.applyW(x, 'transp')
+            # apply S
+            out = self.applyS(x)
+            # apply f
+            out = self.applyF(out)
+            # # apply mask
+            # out = applyM(out)
+
+          return out
+
+        # adjoint testing
+        self.sMaps = self.sMaps.to(torch.complex128)
+        err0 = math_utils.test_adjoint_torch(x.to(torch.complex128), applyA_t0)
+        ## okay so here is the problem i guess??
+        err1 = math_utils.test_adjoint_torch(x.to(torch.complex128), applyA_t1)
+        err2 = math_utils.test_adjoint_torch(x.to(torch.complex128), applyA_t2)
         out = self.grad_desc(x, applyA, b)
         out = self.prox(out, mask, b)
 
