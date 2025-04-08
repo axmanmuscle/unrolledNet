@@ -406,7 +406,7 @@ class unrolled_block_wav(nn.Module):
             # inverse wavelet transform
             out = self.applyW(x, 'transp')
             # apply S
-            out = self.applyS(x)
+            out = self.applyS(out)
             # apply f
             out = self.applyF(out)
             # apply mask
@@ -414,6 +414,9 @@ class unrolled_block_wav(nn.Module):
 
           return out
 
+        # adjoint testing
+        # self.sMaps = self.sMaps.to(torch.complex128)
+        # err = math_utils.test_adjoint_torch(x.to(torch.complex128), applyA)
         out = self.grad_desc(x, applyA, b)
         out = self.prox(out, mask, b)
 

@@ -81,7 +81,13 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
           im = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( tdata, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
         else:
           im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( tdata, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
-        out = model(im, tmask>0, tdata_consistency)
+        
+        ## for wavelets
+        wavSplit = torch.tensor(math_utils.makeWavSplit(torch.squeeze(im).shape))
+        im_in = torch.zeros_like(im)
+        im_in[..., :] = math_utils.wtDaubechies2(torch.squeeze(im), wavSplit)
+        im_in = im_in.to(device)
+        out = model(im_in, tmask>0, tdata_consistency)
       else:
         out = model(tdata) 
       #if jdx < 1:
@@ -154,6 +160,7 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
     plt.clf()
     del all_im, out, oc
     gc.collect()
+    
 
   plt.plot(tl_ar)
   plt.plot(vl_ar)
@@ -381,7 +388,8 @@ def main():
   read in data and decide what to iterate over
   """
   rng = np.random.default_rng(20250313)
-  data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
+  # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
+  data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
   kSpace = data['d2']
   kSpace = kSpace / np.max(np.abs(kSpace))
   sMaps = data['smap']
@@ -389,7 +397,8 @@ def main():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/home/alex/Documents/research/mri/results/407_moreiters'
+  # results_dir = '/home/alex/Documents/research/mri/results/426_wavtests'
+  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/407_wavtests'
 
   # mask = vdSampleMask(kSpace.shape[0:2], [30, 30], np.round(np.prod(kSpace.shape[0:2]) * 0.4))
   # us_kSpace = kSpace*mask[:, :, np.newaxis]
@@ -409,12 +418,12 @@ def main():
   # us_kSpace[~mask] = 0
   # ks = torch.tensor(us_kSpace)
 
-  samp_fracs = [0.25, 0.2, 0.1, 0.08]
-  train_fracs = [0.9, 0.8]
+  samp_fracs = [0.25]
+  train_fracs = [0.9]
   train_loss_split_frac = 0.8
-  k_s = [25, 50]
+  k_s = [4]
   dcs = [True]
-  val_stop_trainings = [15]
+  val_stop_trainings = [3]
 
   for sf in samp_fracs:
     for tf in train_fracs:
@@ -424,7 +433,7 @@ def main():
 
             run_training(kSpace2, sImg, sImg, sMaps, rng, 
                       sf, tf, train_loss_split_frac, 
-                      k, dc, results_dir, vst, 50)
+                      k, dc, results_dir, vst, 1)
   return 0
   
 if __name__ == "__main__":
