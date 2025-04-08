@@ -243,9 +243,9 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     training_kspace = torch.tensor( train_mask[:, :, np.newaxis] ) * ks
     val_kspace = torch.tensor( val_mask[:, :, np.newaxis] ) * ks
 
-  sub_kspace = torch.tensor(sub_kspace)
-  training_kspace = torch.tensor(training_kspace)
-  val_kspace = torch.tensor(val_kspace)
+  # sub_kspace = torch.tensor(sub_kspace)
+  # training_kspace = torch.tensor(training_kspace)
+  # val_kspace = torch.tensor(val_kspace)
   val_mask = torch.tensor(val_mask)
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -338,7 +338,6 @@ def test_mc_gd():
                       k, dc, results_dir, vst, 50)
   return 0
 
-
 def test_sc():
   """
   read in data and decide what to iterate over
@@ -388,17 +387,17 @@ def main():
   read in data and decide what to iterate over
   """
   rng = np.random.default_rng(20250313)
-  # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
-  data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
+  data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
+  # data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
   kSpace = data['d2']
   kSpace = kSpace / np.max(np.abs(kSpace))
-  sMaps = data['smap']
+  sMaps = data['sm2']
   sMaps = sMaps / np.max(np.abs(sMaps))
 
   sImg = kSpace.shape[0:2]
 
-  # results_dir = '/home/alex/Documents/research/mri/results/426_wavtests'
-  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/407_wavtests'
+  results_dir = '/home/alex/Documents/research/mri/results/408_wavtests_large'
+  # results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/407_wavtests'
 
   # mask = vdSampleMask(kSpace.shape[0:2], [30, 30], np.round(np.prod(kSpace.shape[0:2]) * 0.4))
   # us_kSpace = kSpace*mask[:, :, np.newaxis]
@@ -418,12 +417,12 @@ def main():
   # us_kSpace[~mask] = 0
   # ks = torch.tensor(us_kSpace)
 
-  samp_fracs = [0.25]
+  samp_fracs = [0.25, 0.15, 0.1, 0.08]
   train_fracs = [0.9]
   train_loss_split_frac = 0.8
-  k_s = [4]
+  k_s = [40]
   dcs = [True]
-  val_stop_trainings = [3]
+  val_stop_trainings = [15]
 
   for sf in samp_fracs:
     for tf in train_fracs:
@@ -433,7 +432,7 @@ def main():
 
             run_training(kSpace2, sImg, sImg, sMaps, rng, 
                       sf, tf, train_loss_split_frac, 
-                      k, dc, results_dir, vst, 1)
+                      k, dc, results_dir, vst, 50)
   return 0
   
 if __name__ == "__main__":

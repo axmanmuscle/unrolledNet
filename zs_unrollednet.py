@@ -269,7 +269,7 @@ class unrolled_block_wav(nn.Module):
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
         self.device = device
-        self.nn = build_unet_small(shape[1])
+        self.nn = build_unet(shape[1])
         self.wavSplit = wavSplit
 
     def applyW(self, x, op='notransp'):
@@ -324,7 +324,7 @@ class unrolled_block_wav(nn.Module):
         
         gx = grad(x)
         gxNorm = torch.norm(gx.reshape(-1, 1))**2
-        alpha = 1e-4 # TODO this may need to get changed
+        alpha = 1e-2 # TODO this may need to get changed
         rho = 0.9
         c = 0.9
         max_linesearch_iters = 250
@@ -339,7 +339,7 @@ class unrolled_block_wav(nn.Module):
                 break
             alpha *= rho
 
-        print(f'grad_descent line search finished after {linesearch_iter} iters')
+        # print(f'grad_descent line search finished after {linesearch_iter} iters')
         return xNew
     
     def prox(self, x, mask, b):
