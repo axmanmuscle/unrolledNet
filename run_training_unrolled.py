@@ -252,8 +252,8 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     sMaps = sMaps.to(device)
     if wavelets:
       model = ZS_Unrolled_Network_wavelets(sImg, device, sMaps, 2)
-    # model = ZS_Unrolled_Network_gd(sImg, device,sMaps, 20) 
-    # model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
+      # model = ZS_Unrolled_Network_gd(sImg, device,sMaps, 20) 
+      # model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
 
   model = model.to(device)
   optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
@@ -389,7 +389,7 @@ def main():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/home/alex/Documents/research/mri/results/426_wavtests'
+  results_dir = '/home/alex/Documents/research/mri/results/407_moreiters'
 
   # mask = vdSampleMask(kSpace.shape[0:2], [30, 30], np.round(np.prod(kSpace.shape[0:2]) * 0.4))
   # us_kSpace = kSpace*mask[:, :, np.newaxis]

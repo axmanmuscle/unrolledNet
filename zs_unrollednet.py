@@ -110,7 +110,7 @@ class unrolled_block(nn.Module):
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
         self.device = device
-        self.nn = build_unet(shape[1])
+        self.nn = build_unet_small(shape[1])
     
     def applyS(self, x, op='notransp'):
         if op == 'transp':
