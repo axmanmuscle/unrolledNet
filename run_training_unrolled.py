@@ -417,12 +417,12 @@ def main():
   # us_kSpace[~mask] = 0
   # ks = torch.tensor(us_kSpace)
 
-  samp_fracs = [0.25, 0.15, 0.1, 0.08]
+  samp_fracs = [0.15]
   train_fracs = [0.9]
   train_loss_split_frac = 0.8
-  k_s = [40]
+  k_s = [100]
   dcs = [True]
-  val_stop_trainings = [15]
+  val_stop_trainings = [50]
 
   for sf in samp_fracs:
     for tf in train_fracs:
@@ -432,7 +432,7 @@ def main():
 
             run_training(kSpace2, sImg, sImg, sMaps, rng, 
                       sf, tf, train_loss_split_frac, 
-                      k, dc, results_dir, vst, 50)
+                      k, dc, results_dir, vst, 250)
   return 0
   
 if __name__ == "__main__":
