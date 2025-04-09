@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from unet import build_unet ,build_unet_small
-from torchsummary import summary
+from torchinfo import summary
 import gc
 import utils
 import math_utils
@@ -269,7 +269,7 @@ class unrolled_block_wav(nn.Module):
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
         self.device = device
-        self.nn = build_unet(shape[1])
+        self.nn = build_unet_small(shape[1])
         self.wavSplit = wavSplit
 
     def applyW(self, x, op='notransp'):
@@ -860,3 +860,30 @@ class ZS_Unrolled_Network_wavelets(nn.Module):
 
     def forward(self, inputs, mask, b):
         return self.model((inputs, mask, b))
+    
+if __name__ == "__main__":
+    import scipy.io as sio
+
+    # test size of model
+    # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
+    data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data_newsmap.mat')
+    kSpace = data['d2']
+    kSpace = kSpace / np.max(np.abs(kSpace))
+    sMaps = data['sm2']
+    sMaps = sMaps / np.max(np.abs(sMaps))
+
+    sImg = kSpace.shape[0:2]
+    sMaps = torch.tensor(sMaps)
+    kSpace = torch.tensor(kSpace)
+    kSpace = kSpace.unsqueeze(0)
+    kSpace = kSpace.unsqueeze(0)
+    kSpace = kSpace.to(torch.complex64)
+    sMaps = sMaps.to(torch.complex64)
+
+    mask = utils.vdSampleMask(sImg, [30, 30], np.round(np.prod(sImg) * 0.4))
+    # b = kSpace * mask
+    d = torch.device("cpu")
+
+    model = ZS_Unrolled_Network_wavelets([256, 256], d, sMaps, n=10 )
+
+    print(summary(model, [kSpace.shape[0:4], mask.shape, sMaps.shape], dtypes=[torch.complex64, torch.bool, torch.complex64], device="cpu"))

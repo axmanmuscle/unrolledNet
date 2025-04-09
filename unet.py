@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torchsummary import summary
+from torchinfo import summary
 
 class conv_block(nn.Module):
     def __init__(self, in_c, out_c):
@@ -119,17 +119,18 @@ class build_unet_small(nn.Module):
         """ Encoder """
         self.e1 = encoder_block(1, 64)
         self.e2 = encoder_block(64, 128)
-        self.e3 = encoder_block(128, 256)
+        # self.e3 = encoder_block(128, 256)
         #self.e4 = encoder_block(256, 512)
 
         """ Bottleneck """
         #self.b = conv_block(512, 1024)
         #self.b = conv_block(256, 512)
+        # self.b = conv_block(128, 256)
         self.b = conv_block(128, 256)
 
         """ Decoder """
         #self.d1 = decoder_block(1024, 512)
-        self.d2 = decoder_block(512, 256)
+        # self.d2 = decoder_block(512, 256)
         self.d3 = decoder_block(256, 128)
         self.d4 = decoder_block(128, 64)
 
@@ -139,10 +140,10 @@ class build_unet_small(nn.Module):
     def forward(self, inputs):
 
         """ pad to 512 """
-        s0 = self.enlarge(inputs)
+        # s0 = self.enlarge(inputs)
         
         """ Encoder """
-        s1, p1 = self.e1(s0)
+        s1, p1 = self.e1(inputs)
         s2, p2 = self.e2(p1)
         # s3, p3 = self.e3(p2)
         #s4, p4 = self.e4(p3)
@@ -157,7 +158,7 @@ class build_unet_small(nn.Module):
         d4 = self.d4(d3, s1)
 
         outputs = self.outputs(d4)
-        outputs = self.decimate(outputs)
+        # outputs = self.decimate(outputs)
         
 
         return outputs
@@ -166,6 +167,6 @@ if __name__ == "__main__":
     # f = build_unet(256)
     # summary(f, (1, 256, 256))
     f2 = build_unet_small(256)
-    summary(f2, (1, 256, 256))
+    summary(f2, (1, 1, 256, 256))
     a = torch.rand((1, 1, 256, 256))
     print(f2(a).shape)

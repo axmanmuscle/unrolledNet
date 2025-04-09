@@ -387,8 +387,8 @@ def main():
   read in data and decide what to iterate over
   """
   rng = np.random.default_rng(20250313)
-  data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
-  # data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
+  # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
+  data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data_newsmap.mat')
   kSpace = data['d2']
   kSpace = kSpace / np.max(np.abs(kSpace))
   sMaps = data['sm2']
@@ -396,8 +396,8 @@ def main():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/home/alex/Documents/research/mri/results/408_wavtests_large'
-  # results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/407_wavtests'
+  # results_dir = '/home/alex/Documents/research/mri/results/408_wavtests_large'
+  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/407_wavtests'
 
   # mask = vdSampleMask(kSpace.shape[0:2], [30, 30], np.round(np.prod(kSpace.shape[0:2]) * 0.4))
   # us_kSpace = kSpace*mask[:, :, np.newaxis]
@@ -420,7 +420,7 @@ def main():
   samp_fracs = [0.15]
   train_fracs = [0.9]
   train_loss_split_frac = 0.8
-  k_s = [100]
+  k_s = [20]
   dcs = [True]
   val_stop_trainings = [50]
 
@@ -432,7 +432,7 @@ def main():
 
             run_training(kSpace2, sImg, sImg, sMaps, rng, 
                       sf, tf, train_loss_split_frac, 
-                      k, dc, results_dir, vst, 250)
+                      k, dc, results_dir, vst, 2)
   return 0
   
 if __name__ == "__main__":
