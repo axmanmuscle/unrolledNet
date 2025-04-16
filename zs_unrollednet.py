@@ -264,13 +264,14 @@ class unrolled_block_wav(nn.Module):
     we probably need A matrix free huh
     I might need to actually make that
     """
-    def __init__(self, sMaps, shape, wavSplit, device):
+    def __init__(self, sMaps, shape, wavSplit, device, dc=True):
         super(unrolled_block_wav, self).__init__()
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
         self.device = device
         self.nn = build_unet_small(shape[1])
         self.wavSplit = wavSplit
+        self.dc = dc
 
     def applyW(self, x, op='notransp'):
         """
@@ -418,7 +419,9 @@ class unrolled_block_wav(nn.Module):
         # self.sMaps = self.sMaps.to(torch.complex128)
         # err = math_utils.test_adjoint_torch(x.to(torch.complex128), applyA)
         out = self.grad_desc(x, applyA, b)
-        out = self.prox(out, mask, b)
+
+        if self.dc:
+            out = self.prox(out, mask, b)
 
         # wavelets to image space
         out = self.applyW(out, 'transp')
@@ -840,7 +843,7 @@ class ZS_Unrolled_Network_gd(nn.Module):
         return o
 
 class ZS_Unrolled_Network_wavelets(nn.Module):
-    def __init__(self, sImg, device, sMaps=[], n=10):
+    def __init__(self, sImg, device, sMaps=[], n=10, dc=True):
         super(ZS_Unrolled_Network_wavelets, self).__init__()
         self.n = n
         self.device = device
@@ -853,13 +856,15 @@ class ZS_Unrolled_Network_wavelets(nn.Module):
             mod.append(prox_block_sc(device))
         else: # multicoil
             for i in range(n):
-                mod.append(unrolled_block_wav(sMaps, sImg, self.wavSplit, device))
-            mod.append(prox_block_wav(sMaps, device, self.wavSplit))
+                mod.append(unrolled_block_wav(sMaps, sImg, self.wavSplit, device, dc))
+            if dc:
+                mod.append(prox_block_wav(sMaps, device, self.wavSplit))
 
         self.model = nn.Sequential(*mod)
 
     def forward(self, inputs, mask, b):
         return self.model((inputs, mask, b))
+    
     
 if __name__ == "__main__":
     import scipy.io as sio
