@@ -258,7 +258,7 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     print('multi coil')
     sMaps = sMaps.to(device)
     if wavelets:
-      model = ZS_Unrolled_Network_wavelets(sImg, device, sMaps, 2)
+      model = ZS_Unrolled_Network_wavelets(sImg, device, sMaps, 2, dc=dc)
       # model = ZS_Unrolled_Network_gd(sImg, device,sMaps, 20) 
       # model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
 
@@ -295,6 +295,8 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( im ) ), cmap='grey')
 
   # test_only_gd(sub_kspace, model, directory, torch.tensor(usMask > 0))
+  ## i think we need this even when DC is false bc of the way i wrote the model
+  dc = True
   training_loop(training_kspace, val_kspace, val_mask, tl_masks,
               model, math_utils.unrolled_loss_mixed, sMaps, optimizer, dc, 
               val_stop_training, num_epochs, device,
@@ -387,8 +389,8 @@ def main():
   read in data and decide what to iterate over
   """
   rng = np.random.default_rng(20250313)
-  # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
-  data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data_newsmap.mat')
+  data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
+  # data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data_newsmap.mat')
   kSpace = data['d2']
   kSpace = kSpace / np.max(np.abs(kSpace))
   sMaps = data['sm2']
@@ -396,8 +398,8 @@ def main():
 
   sImg = kSpace.shape[0:2]
 
-  # results_dir = '/home/alex/Documents/research/mri/results/408_wavtests_large'
-  results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/407_wavtests'
+  results_dir = '/home/alex/Documents/research/mri/results/416_small_dc'
+  # results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/416_small_dc'
 
   # mask = vdSampleMask(kSpace.shape[0:2], [30, 30], np.round(np.prod(kSpace.shape[0:2]) * 0.4))
   # us_kSpace = kSpace*mask[:, :, np.newaxis]
@@ -417,11 +419,11 @@ def main():
   # us_kSpace[~mask] = 0
   # ks = torch.tensor(us_kSpace)
 
-  samp_fracs = [0.15]
+  samp_fracs = [0.4, 0.25, 0.15]
   train_fracs = [0.9]
   train_loss_split_frac = 0.8
-  k_s = [20]
-  dcs = [True]
+  k_s = [25]
+  dcs = [ True, False]
   val_stop_trainings = [50]
 
   for sf in samp_fracs:
@@ -432,7 +434,7 @@ def main():
 
             run_training(kSpace2, sImg, sImg, sMaps, rng, 
                       sf, tf, train_loss_split_frac, 
-                      k, dc, results_dir, vst, 2)
+                      k, dc, results_dir, vst, 75)
   return 0
   
 if __name__ == "__main__":

@@ -100,6 +100,30 @@ class prox_block_wav(nn.Module):
 
         return out
 
+class final_block_nodc_wav(nn.Module):
+    """
+    final block for the wavelet network
+    """
+
+    def __init__(self, sMaps, device, wavSplit):
+        super(final_block_nodc_wav, self).__init__()
+        self.device = device
+        self.sMaps = sMaps
+        self.nCoils = sMaps.shape[-1]
+        self.wavSplit = wavSplit
+
+    def forward(self, inputs):
+        """
+        forward method for the final block
+        just return the wavelet coefficients to image space
+        """
+        x, mask, b = inputs
+
+        # wavelet coefficients to image space
+        x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
+
+        return x
+
 class unrolled_block(nn.Module):
     """
     we probably need A matrix free huh
@@ -269,7 +293,7 @@ class unrolled_block_wav(nn.Module):
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
         self.device = device
-        self.nn = build_unet_small(shape[1])
+        self.nn = build_unet(shape[1])
         self.wavSplit = wavSplit
         self.dc = dc
 
@@ -848,6 +872,7 @@ class ZS_Unrolled_Network_wavelets(nn.Module):
         self.n = n
         self.device = device
         self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
+        self.dc = dc
         mod = []
         if len(sMaps) == 0: # single coil
             assert False, 'single coil not implemented for wavelets yet'
@@ -859,19 +884,22 @@ class ZS_Unrolled_Network_wavelets(nn.Module):
                 mod.append(unrolled_block_wav(sMaps, sImg, self.wavSplit, device, dc))
             if dc:
                 mod.append(prox_block_wav(sMaps, device, self.wavSplit))
+            else:
+                mod.append(final_block_nodc_wav(sMaps, device, self.wavSplit))
 
         self.model = nn.Sequential(*mod)
 
     def forward(self, inputs, mask, b):
-        return self.model((inputs, mask, b))
+      return self.model((inputs, mask, b))
+
     
     
 if __name__ == "__main__":
     import scipy.io as sio
 
     # test size of model
-    # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
-    data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data_newsmap.mat')
+    data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
+    # data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data_newsmap.mat')
     kSpace = data['d2']
     kSpace = kSpace / np.max(np.abs(kSpace))
     sMaps = data['sm2']
