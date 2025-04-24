@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math_utils
 
+import argparse
+
 def test_ft():
     """
     something is funky with the Fourier transforms so this is to figure out what
@@ -103,7 +105,7 @@ def test_ft():
     tfhfa = torch.tensor(fhfa)
 
     print(f'forward test: {torch.norm(applyF_noshift(ta) - tfa)}')
-    print(f'backward test: {torch.norm(applyF_noshift(applyF_noshift(ta), 'transp') - tfhfa)}')
+    # print(f'backward test: {torch.norm(applyF_noshift(applyF_noshift(ta), 'transp') - tfhfa)}')
 
     fft_data2 = sio.loadmat('/Users/alex/Documents/MATLAB/dataConsistency/fft_test2.mat')
 
@@ -183,9 +185,37 @@ def test_ft2():
         db2 = ip(fa, b)
 
         print(f'test {torch.abs(db1 - db2)}')
+
+
+def parser_test():
+
+    # Create the parser
+    parser = argparse.ArgumentParser(description='Process some file paths.')
+    
+    # Add arguments with defaults (you can replace these with your current hardcoded paths)
+    parser.add_argument('--input', type=str, default='/default/input/path.txt',
+                        help='Path to the input file')
+    parser.add_argument('--output', type=str, default='/default/output/path.txt',
+                        help='Path to the output file')
+    parser.add_argument('--config', type=str, default='/default/config/path.json',
+                        help='Path to the configuration file')
+    
+    # Parse the arguments
+    args = parser.parse_args()
+    
+    # Now use the paths in your code
+    input_path = args.input
+    output_path = args.output
+    config_path = args.config
+    
+    # Your code here
+    print(f"Input path: {input_path}")
+    print(f"Output path: {output_path}")
+    print(f"Config path: {config_path}")
     
 
 
 if __name__ == "__main__":
-    classTest()
+    parser_test()
+    # classTest()
     # test_ft()
