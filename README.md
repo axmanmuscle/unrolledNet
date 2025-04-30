@@ -21,3 +21,19 @@ Need to get the hooks on so this can train zero shot self supervised style
 
  ## 41
  This seems to be working with the gradient line search - although now we need to add wavelets (yayyyyyy)
+
+ ## 4/28
+ writing the non-zero shot version of this now. needs to take in the sensitivity maps and the initial image (or wavelet coeffs?)
+
+ ### TO DO TODAY:
+  - [ ] write this
+  - [ ] write paper
+  - [ ] work on fetal data for a little
+
+#### Changes for supervised
+ - SMaps at ``forward`` time not construction
+ - same with masks i guess
+
+
+#### For Fetal data
+since the data isnt centered in the space domain we need to be careful about doing the fftshift *after* the ffts during the prox blocks, etc.
