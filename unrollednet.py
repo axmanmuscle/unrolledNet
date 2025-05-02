@@ -27,6 +27,13 @@ from unet import build_unet
 from torchsummary import summary
 import gc
 
+"""
+
+******************************************************************
+deprecated
+******************************************************************
+
+"""
 class prox_block(nn.Module):
     """
     just a module for the proximal block
@@ -293,5 +300,12 @@ def main():
     # print(summary(model, (1, 256, 256)))
     return 0
 
+"""
+
+******************************************************************
+deprecated
+******************************************************************
+
+"""
 if __name__ == "__main__":
     main()

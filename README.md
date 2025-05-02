@@ -37,3 +37,9 @@ Need to get the hooks on so this can train zero shot self supervised style
 
 #### For Fetal data
 since the data isnt centered in the space domain we need to be careful about doing the fftshift *after* the ffts during the prox blocks, etc.
+
+#### For Supervised
+Have the dataset written now it's time to test a simple training loop
+
+if that works then we can just throw it on the supercomputer although we'll need to get the sensmaps over there too
+ ezpz do that sometime tomorrow
