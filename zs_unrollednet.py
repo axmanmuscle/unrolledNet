@@ -898,7 +898,7 @@ if __name__ == "__main__":
     import scipy.io as sio
 
     # test size of model
-    data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
+    data = sio.loadmat('/home/mcmanus/code/unrolledNet/brain_data_newsmap.mat')
     # data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data_newsmap.mat')
     kSpace = data['d2']
     kSpace = kSpace / np.max(np.abs(kSpace))

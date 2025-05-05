@@ -41,7 +41,6 @@ class MRIDataset(Dataset):
             if not os.path.exists(sens_path):
                 print(f"file not found for sens (skipping for now)")
                 continue
-                # raise FileNotFoundError(f"Sensitivity map file not found: {sens_path}")
             
             # Open both files to get number of slices
             with h5py.File(kspace_path, 'r') as kspace_f, h5py.File(sens_path, 'r') as sens_f:
@@ -49,8 +48,7 @@ class MRIDataset(Dataset):
                 sens_data = sens_f['sens_maps']  # dataset key is 'sensitivity_maps'
                 
                 num_slices_kspace = kspace_data.shape[0]
-
-                imag_data = sens_data['i'] # pull imaginary portion
+                imag_data = sens_data['i']  # pull imaginary portion
                 num_slices_sens = imag_data.shape[0]
                 
                 # Verify slice counts match
@@ -91,7 +89,7 @@ class MRIDataset(Dataset):
             sens_map = sens_f['sens_maps']
             sens_real = sens_map['r']
             sens_imag = sens_map['i']
-            srr = sens_real[slice_idx, ...]  # Shape: (num_coils, H, W), complex-valued
+            srr = sens_real[slice_idx, ...]  # Shape: (num_coils, H, W)
             sri = sens_imag[slice_idx, ...]
             sens_map = srr + 1j * sri
         
@@ -111,64 +109,130 @@ class MRIDataset(Dataset):
         return kspace_tensor, sens_tensor, kspace_tensor  # Example: target is k-space
 
 def main():
+    # Define directories (update these paths as needed)
+    kspace_dir = '/mnt/e/mri/fastMRI/brain'
+    sens_dir = '/mnt/e/mri/fastMRI/brain/sens_maps'
 
-  ## load data
-  ## maybe get the stuff from training the fastMRI data ? data loader or something
+    # Create dataset
+    dataset = MRIDataset(kspace_dir=kspace_dir, sens_dir=sens_dir)
+    
+    # Create DataLoader
+    dataloader = DataLoader(
+        dataset,
+        batch_size=1,          # Adjust based on GPU memory
+        shuffle=True,          # Shuffle for training
+        num_workers=1,         # Parallel loading (adjust based on system)
+        pin_memory=True,       # Faster GPU transfer
+        drop_last=True         # Drop incomplete batch
+    )
 
-  # create dataset from the class above
-  dataset = 0
-  # Create DataLoader
-  dataloader = DataLoader(
-      dataset,
-      batch_size=4,          # Adjust based on GPU memory
-      shuffle=True,          # Shuffle for training
-      num_workers=4,         # Parallel loading (adjust based on system)
-      pin_memory=True,       # Faster GPU transfer
-      drop_last=True         # Drop incomplete batch
-  )
+    # Set device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-  device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Define image size
+    # sImg = [256, 256]
+    for i, data in enumerate(dataloader):
+      k = data[0]
+      sImg = k.shape[-2:]
+      break
 
-  ## make model
-  sImg = [256, 256] # get the data size here
+    # Initialize model
+    dataconsistency = True
+    multicoil = True
+    model = unrolled_net(sImg, device, 3, dataconsistency, multicoil)
+    model = model.to(device)
 
-  dataconsistency = True
-  multicoil = True
-  model = unrolled_net(sImg, device, dataconsistency, multicoil)
+    # Define optimizer
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Adjusted learning rate
 
-  model = model.to(device)
-  optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
+    # Create undersampling mask
+    mask = utils.vdSampleMask(sImg, [30, 50], 0.25 * np.prod(sImg), maskType='laplace')
+    mask = torch.tensor(mask)
+    mask = mask.to(device)
 
-  ## make undersampling mask
-  mask = utils.vdSampleMask(sImg, [30, 50], 0.25*np.prod(sImg), maskType = 'laplace')
+    # Define loss function
+    criterion = torch.nn.MSELoss()
 
-  ## apply to data
+    # Training parameters
+    num_epochs = 100
 
-  ## get sensitivity maps
+    # Training loop
+    model.train()
+    for epoch in range(num_epochs):
+        train_loss = 0.0
+        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
+        
+        for batch_idx, (kspace, sens_maps, target) in enumerate(progress_bar):
+            # Move data to device
+            kspace = kspace.to(device)  # Shape: (batch, 2, H, W)
+            sens_maps = sens_maps.to(device)  # Shape: (batch, num_coils, H, W, 2)
+            target = target.to(device)  # Shape: (batch, 2, H, W)
 
-  ## train
-  model.train()
+            # Convert sensitivity maps to complex
+            sens_maps_complex = sens_maps[..., 0] + 1j * sens_maps[..., 1]  # Shape: (batch, num_coils, H, W)
 
-  num_epochs = 100
+            # Apply undersampling mask to k-space
+            kspace_undersampled = kspace.clone()
+            if len(mask.shape) < 3:
+                kspace_undersampled[:, :, ~mask] = 0
+            else:
+                kspace_undersampled[~mask] = 0
 
-  for i in range(num_epochs):
-    ## do training
-    train_loss = 0 
+            # Initialize input for the model (e.g., zero-filled reconstruction)
+            x_init = torch.zeros_like(kspace[:, 0:1, ...])  # Shape: (batch, 1, H, W)
 
-  #### batch here
-  return 0
+            # Forward pass
+            output, _, _ = model(x_init, mask, kspace_undersampled)  # Output shape: (batch, H, W)
+
+            # Convert output to image space if needed (assuming output is in wavelet domain)
+            output_image = math_utils.iwtDaubechies2(output, model.wavSplit)
+
+            # Compute target image (e.g., inverse Fourier transform of fully-sampled k-space)
+            target_complex = target[:, 0, ...] + 1j * target[:, 1, ...]  # Shape: (batch, H, W)
+            target_image = torch.fft.fftshift(
+                torch.fft.ifftn(
+                    torch.fft.ifftshift(target_complex, dim=(-2, -1)),
+                    norm='ortho',
+                    dim=(-2, -1)
+                ),
+                dim=(-2, -1)
+            )
+
+            # Compute loss (MSE between reconstructed and target images)
+            loss = criterion(output_image.abs(), target_image.abs())
+
+            # Backward pass and optimization
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # Update running loss
+            train_loss += loss.item() * kspace.size(0)
+
+            # Update progress bar
+            progress_bar.set_postfix({'batch_loss': loss.item()})
+
+        # Compute average epoch loss
+        epoch_loss = train_loss / len(dataloader.dataset)
+        print(f"Epoch {epoch+1}/{num_epochs}, Average Loss: {epoch_loss:.6f}")
+
+        # Optionally save model checkpoint
+        if (epoch + 1) % 10 == 0:
+            torch.save(model.state_dict(), f"checkpoint_epoch_{epoch+1}.pth")
+
+    return 0
 
 def test_dataset():
     dirname = '/mnt/e/mri/fastMRI/brain'
-    dataset = MRIDataset(kspace_dir = dirname, sens_dir = dirname + '/sens_maps')
+    dataset = MRIDataset(kspace_dir=dirname, sens_dir=dirname + '/sens_maps')
 
     dataloader = DataLoader(
-      dataset,
-      batch_size=1,          # Adjust based on GPU memory
-      shuffle=True,          # Shuffle for training
-      num_workers=1,         # Parallel loading (adjust based on system)
-      pin_memory=True,       # Faster GPU transfer
-      drop_last=True         # Drop incomplete batch
+        dataset,
+        batch_size=1,          # Adjust based on GPU memory
+        shuffle=True,          # Shuffle for training
+        num_workers=1,         # Parallel loading (adjust based on system)
+        pin_memory=True,       # Faster GPU training
+        drop_last=True         # Drop incomplete batch
     )
 
     for i, data in enumerate(dataloader):
@@ -176,10 +240,8 @@ def test_dataset():
         kspace = data[0]
         print(f'{kspace.shape}')
 
-
-
     return 0
 
 if __name__ == "__main__":
-    test_dataset()
-  # main()
+    # test_dataset()
+    main()
