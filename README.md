@@ -43,3 +43,72 @@ Have the dataset written now it's time to test a simple training loop
 
 if that works then we can just throw it on the supercomputer although we'll need to get the sensmaps over there too
  ezpz do that sometime tomorrow
+
+
+
+## Supervised Network
+
+## 🕐 **2-Hour Task Breakdown**
+
+### 🔹 **Hour 1: Debug + Refactor Core Training Pipeline**
+
+**⏱ 0:00–0:10 — Fix Dataset Issues**
+
+* [ ] Fix `__getitem__` signature (`def __getitem__(self, idx):`)
+* [ ] Ensure returned `kspace_tensor` and `sens_tensor` are properly normalized
+* [ ] Make sure `kspace_tensor` remains complex (no real/imag stack unless your network expects it)
+
+**⏱ 0:10–0:25 — Fix DataLoader and Batch Construction**
+
+* [ ] Confirm that `mask` is broadcastable to k-space shape: `[1, H, W]`
+* [ ] Apply it cleanly: `kspace_undersampled = kspace * mask[None, None, :, :]`
+
+**⏱ 0:25–0:45 — Fix Forward Pass**
+
+* [ ] Call `model(x_init, mask, kspace_undersampled, sens_maps)` correctly
+* [ ] Make sure `x_init` has correct shape `[B, 1, H, W]`
+* [ ] Print output shape from model and verify it is what you expect (image, wavelet coeffs, etc.)
+
+**⏱ 0:45–1:00 — Swap to Image-Domain Target**
+
+* [ ] Compute `target_image = ifft2c(kspace)` (use `math_utils` or define it)
+* [ ] Apply Roemer combination: `target_image = coil_combine(target_image, sens_maps)`
+* [ ] Compare to `output_image = iwtDaubechies2(output, model.wavSplit)`
+* [ ] Use `MSELoss(output_image.abs(), target_image.abs())`
+
+---
+
+### 🔹 **Hour 2: Utilities + Evaluation Clean-up**
+
+**⏱ 1:00–1:20 — Add Utility for Coil Combination**
+
+* [ ] Add `coil_combine(image, sMaps)` using Roemer equation:
+
+  ```python
+  def coil_combine(image, sens_maps):
+      return torch.sum(torch.conj(sens_maps) * image, dim=1)
+  ```
+* [ ] Check output type: shape `[B, H, W]`, complex
+
+**⏱ 1:20–1:40 — Normalize and Visualize**
+
+* [ ] Normalize image magnitudes to `[0, 1]` or their own maximums
+* [ ] Optionally plot a few slices (e.g. `matplotlib.imshow(output_image[0].abs().cpu())`) for sanity
+
+**⏱ 1:40–2:00 — Clean Logging + Loss Tracking**
+
+* [ ] Print loss values and confirm they're not NaN
+* [ ] Save a few reconstructions + targets to disk every N epochs for visual debugging
+* [ ] Optionally wrap model in `torch.nn.DataParallel` if you plan to scale up later
+
+---
+
+## ✅ **What You'll Have at the End**
+
+* Clean dataset and dataloader
+* Proper model input/output wiring
+* Image-domain loss with Roemer coil combination
+* Valid reconstructions with monitored training loss
+* A stable, interpretable training loop to begin fine-tuning
+
+Would you like me to generate the updated versions of `__getitem__`, the training loop, and a `coil_combine()` function to get you started?

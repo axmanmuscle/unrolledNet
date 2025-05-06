@@ -94,13 +94,11 @@ class MRIDataset(Dataset):
             sens_map = srr + 1j * sri
         
         # Preprocess k-space (normalize, split real/imag)
-        kspace = (kspace - kspace.mean()) / kspace.std()
-        kspace = np.stack([kspace.real, kspace.imag], axis=0)  # Shape: (2, H, W)
-        
+        kspace = kspace / np.max(np.abs(kspace)) # Shape: (num_coils, Nx, Ny)
+
         # Preprocess sensitivity map (normalize, split real/imag)
-        sens_map = (sens_map - sens_map.mean()) / sens_map.std()
-        sens_map = np.stack([sens_map.real, sens_map.imag], axis=-1)  # Shape: (num_coils, H, W, 2)
-        
+        sens_map = sens_map / np.max(np.abs(sens_map)) # shape (num_coils, Nx, Ny)
+
         # Convert to PyTorch tensors
         kspace_tensor = torch.from_numpy(kspace).float()
         sens_tensor = torch.from_numpy(sens_map).float()
@@ -147,6 +145,7 @@ def main():
 
     # Create undersampling mask
     mask = utils.vdSampleMask(sImg, [30, 50], 0.25 * np.prod(sImg), maskType='laplace')
+    mask = mask > 0
     mask = torch.tensor(mask)
     mask = mask.to(device)
 
@@ -164,12 +163,9 @@ def main():
         
         for batch_idx, (kspace, sens_maps, target) in enumerate(progress_bar):
             # Move data to device
-            kspace = kspace.to(device)  # Shape: (batch, 2, H, W)
-            sens_maps = sens_maps.to(device)  # Shape: (batch, num_coils, H, W, 2)
-            target = target.to(device)  # Shape: (batch, 2, H, W)
-
-            # Convert sensitivity maps to complex
-            sens_maps_complex = sens_maps[..., 0] + 1j * sens_maps[..., 1]  # Shape: (batch, num_coils, H, W)
+            kspace = kspace.to(device)  
+            sens_maps = sens_maps.to(device)  
+            target = target.to(device)         
 
             # Apply undersampling mask to k-space
             kspace_undersampled = kspace.clone()
@@ -179,7 +175,9 @@ def main():
                 kspace_undersampled[~mask] = 0
 
             # Initialize input for the model (e.g., zero-filled reconstruction)
-            x_init = torch.zeros_like(kspace[:, 0:1, ...])  # Shape: (batch, 1, H, W)
+            ks = torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3])
+            ks1 = ks * torch.conj(sens_maps)
+            x_init = torch.squeeze(torch.sum(ks1, dim = 1)) # dim = 1 is coil dimension
 
             # Forward pass
             output, _, _ = model(x_init, mask, kspace_undersampled)  # Output shape: (batch, H, W)
