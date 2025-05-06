@@ -7,6 +7,29 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import laplace, norm
 
+def save_im_cube(data, fname, title=''):
+    """
+    the expectation here is that we're plotting data of size [Nx x Ny x C]
+    and we will make C subplots
+    """
+    sImg = data.shape
+    fig = plt.figure()
+    C = sImg[-1]
+    cols = int(np.ceil(C/2))
+    rows = int(np.ceil(C/cols))
+
+    for i in range(C):
+        ax = fig.add_subplot(rows, cols, i+1)
+        ax.imshow(np.abs(data[:,:,i]), cmap='gray')
+        if len(title) == 0:
+            ax.set_title('Coil ' + str(i))
+
+    if len(title) > 0:
+        plt.suptitle(title)
+
+    fig.savefig(fname)
+    plt.close()
+
 
 def view_im_cube(data, title=''):
     """

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import math_utils
 
 import argparse
+import h5py
 
 def test_ft():
     """
@@ -213,9 +214,37 @@ def parser_test():
     print(f"Output path: {output_path}")
     print(f"Config path: {config_path}")
     
+def test_h5():
+    import glob
+    from utils import save_im_cube
+    kspace_dir = '/mnt/e/mri/fastMRI/brain'
+
+    fnames = glob.glob(kspace_dir + '/*.h5')
+
+    kspace_path = fnames[0]
+    print(kspace_path)
+    
+    # Load k-space slice
+    with h5py.File(kspace_path, 'r') as kspace_f:
+        kspace = kspace_f['kspace']
+        ks = np.array(kspace)
+    
+    nSlice = ks.shape[0]
+
+    for i in range(nSlice):
+        fn = f'slice{i}.png'
+        print(fn)
+        ki = np.squeeze(ks[i, ...])
+
+        iki = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( ki, axes=(1,2)), axes=(1,2)), axes=(1,2))
+        iki = np.moveaxis(iki, 0, -1)
+        tsq = iki * np.conj(iki)
+        tsq = np.abs(np.sum(tsq, -1))
+        plt.imsave(fn, tsq, cmap='gray')
 
 
 if __name__ == "__main__":
-    parser_test()
+    test_h5()
+    # parser_test()
     # classTest()
     # test_ft()
