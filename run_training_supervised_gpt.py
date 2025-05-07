@@ -126,7 +126,8 @@ def main():
     )
 
     # Set device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Define image size
     # sImg = [256, 256]
@@ -136,9 +137,10 @@ def main():
       break
 
     # Initialize model
+    wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
     dataconsistency = True
     multicoil = True
-    model = unrolled_net(sImg, device, 3, dataconsistency, multicoil)
+    model = unrolled_net(sImg, device, 2, dataconsistency, multicoil)
     model = model.to(device)
 
     # Define optimizer
@@ -178,27 +180,31 @@ def main():
             # Initialize input for the model (e.g., zero-filled reconstruction)
             ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
             ks1 = ks * torch.conj(sens_maps)
-            x_init = torch.squeeze(torch.sum(ks1, dim = 1)) # dim = 1 is coil dimension
+            x_init = torch.sum(ks1, dim = 1) # dim = 1 is coil dimension
+            x_init = x_init.unsqueeze(1)
+
+            wx_init = torch.zeros_like(x_init)
+            wx_init[..., :, :] = math_utils.wtDaubechies2(torch.squeeze(x_init), wavSplit)
+
+            sens_maps = torch.permute(sens_maps, dims=(0,2,3,1))
+
+            kspace_undersampled = torch.permute(kspace_undersampled, (0,2,3,1))
+            kspace_undersampled = kspace_undersampled.unsqueeze(1)
 
             # Forward pass
-            output, _, _ = model(x_init, mask, kspace_undersampled)  # Output shape: (batch, H, W)
+            output = model(wx_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
 
             # Convert output to image space if needed (assuming output is in wavelet domain)
-            output_image = math_utils.iwtDaubechies2(output, model.wavSplit)
 
             # Compute target image (e.g., inverse Fourier transform of fully-sampled k-space)
-            target_complex = target[:, 0, ...] + 1j * target[:, 1, ...]  # Shape: (batch, H, W)
-            target_image = torch.fft.fftshift(
-                torch.fft.ifftn(
-                    torch.fft.ifftshift(target_complex, dim=(-2, -1)),
-                    norm='ortho',
-                    dim=(-2, -1)
-                ),
-                dim=(-2, -1)
-            )
+            itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            itarget = torch.permute(itarget, dims=(0, 2, 3, 1))
+            itarget1 = itarget * torch.conj(sens_maps)
+            target_image = torch.sum(itarget1, dim=-1) # dim 1 is coil dim
+            target_image = target_image.unsqueeze(1)
 
             # Compute loss (MSE between reconstructed and target images)
-            loss = criterion(output_image.abs(), target_image.abs())
+            loss = criterion(output.abs(), target_image.abs())
 
             # Backward pass and optimization
             optimizer.zero_grad()

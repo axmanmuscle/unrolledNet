@@ -39,14 +39,14 @@ class prox_block(nn.Module):
         self.device = device
         self.wavSplit = wavSplit
 
-    def forward(self, inputs, sMaps):
+    def forward(self, inputs):
         """
         forward method for prox block
         simply to do a proximal step at the very end for data consistency
         """
-        nCoils = sMaps.shape[-1]
-        x, mask, b = inputs
+        x, mask, b, sMaps = inputs
 
+        nCoils = sMaps.shape[-1]
         # wavelet coefficients to image space
         x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
 
@@ -130,7 +130,7 @@ class unrolled_block(nn.Module):
     def applyS(self, x, sMaps, op='notransp'):
         nCoils = sMaps.shape[-1]
         if op == 'transp':
-            out = torch.sum( torch.conj(self.sMaps) * x, -1 )
+            out = torch.sum( torch.conj(sMaps) * x, -1 )
         else:
             # out = torch.zeros(size=[nBatch, 1, *sMaps.shape], dtype=sMaps.dtype)
             out = torch.zeros(size = [*x.shape, nCoils], dtype=sMaps.dtype, device=self.device)
@@ -152,7 +152,7 @@ class unrolled_block(nn.Module):
 
     def grad_desc(self, x, A, b):
         """
-        i think A has to downselect here?
+        expecting x is the wavelet coefficients
         """
         def obj(xi):
            return 0.5 * torch.norm(A(xi) - b)**2
@@ -294,14 +294,14 @@ class unrolled_block(nn.Module):
 
 
 class unrolled_net(nn.Module):
-    def __init__(self, sImg, device, n=10, dc=True, sc=False):
+    def __init__(self, sImg, device, n=10, dc=True, mc=True):
         super(unrolled_net, self).__init__()
         self.n = n
         self.device = device
         self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
         self.dc = dc
         mod = []
-        if not sc: # single coil
+        if not mc: # single coil
             assert False, 'single coil not implemented for wavelets yet'
             for i in range(n):
                 mod.append(unrolled_block_sc(sImg, device))
@@ -318,3 +318,13 @@ class unrolled_net(nn.Module):
 
     def forward(self, inputs, mask, b, sMaps):
       return self.model((inputs, mask, b, sMaps))
+    
+if __name__ == "__main__":
+    device = torch.device("cpu")
+    sMaps = torch.randn([1,640,320,16]) + 1j*torch.randn([1,640,320,16])
+    kSpace = torch.randn([1,1,640,320,16]) + 1j*torch.randn([1,1,640,320,16])
+    mask = torch.randn([1,1,640,320])
+    mask = mask > 0
+    model = unrolled_net([640, 320], device, n=2 )
+
+    print(summary(model, [kSpace.shape[0:4], mask.shape[2:4], kSpace.shape, sMaps.shape], dtypes=[torch.complex64, torch.bool, torch.complex64, torch.complex64], device="cpu"))

@@ -112,3 +112,8 @@ if that works then we can just throw it on the supercomputer although we'll need
 * A stable, interpretable training loop to begin fine-tuning
 
 Would you like me to generate the updated versions of `__getitem__`, the training loop, and a `coil_combine()` function to get you started?
+
+
+## TODO
+Supervised training is almost debugged - you have the initial image now. Need to double check whether the initial input into the network should be the image or the wavelet coeffs
+then convert the target into the image as well, make sure loss is computed correctly, then train!
