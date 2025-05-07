@@ -117,3 +117,15 @@ Would you like me to generate the updated versions of `__getitem__`, the trainin
 ## TODO
 Supervised training is almost debugged - you have the initial image now. Need to double check whether the initial input into the network should be the image or the wavelet coeffs
 then convert the target into the image as well, make sure loss is computed correctly, then train!
+
+## List of Items to do
+ - better commenting - make sure you know what permutations, etc. are happening
+ - logging?
+ - validation set
+ - mixed precision
+
+## update
+wrote a bunch of the above except for the comments. run the script as
+```
+python run_training_supervised_gpt.py --data_dir /mnt/e/mri/fastMRI/brain_small/ --save_dir /home/mcmanus/code/unrolledNet/results/ --epochs 1 
+```

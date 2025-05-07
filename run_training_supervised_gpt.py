@@ -12,7 +12,68 @@ import utils
 from tqdm import tqdm
 from unrolled_net import unrolled_net
 from torch.utils.data import Dataset, DataLoader
+import argparse
+import logging
+from torch.utils.data import random_split
 
+## helper functions
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train unrolled MRI reconstruction model")
+    parser.add_argument('--data_dir', type=str, required=True, help="Path to dataset root (should contain kspace and sens_maps)")
+    parser.add_argument('--save_dir', type=str, default='./results', help="Directory to save checkpoints and logs")
+    parser.add_argument('--epochs', type=int, default=100, help="Number of training epochs")
+    args = parser.parse_args()
+    return args
+
+def evaluate(model, val_loader, device, mask, wavSplit, criterion):
+    model.eval()
+    val_loss = 0
+    with torch.no_grad():
+        for kspace, sens_maps, target in val_loader:
+            # Move data to device
+            kspace = kspace.to(device)  
+            sens_maps = sens_maps.to(device)  
+            target = target.to(device)
+
+            # Apply undersampling mask to k-space
+            kspace_undersampled = kspace.clone()
+            if len(mask.shape) < 3:
+                mask_exp = mask[None, None, :, :]  # (1, 1, H, W)
+                kspace_undersampled = kspace * mask_exp
+            else:
+                kspace_undersampled[~mask] = 0
+
+            # Initialize input for the model (e.g., zero-filled reconstruction)
+            ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            ks1 = ks * torch.conj(sens_maps)
+            x_init = torch.sum(ks1, dim = 1) # dim = 1 is coil dimension
+            x_init = x_init.unsqueeze(1)
+
+            wx_init = torch.zeros_like(x_init)
+            wx_init[..., :, :] = math_utils.wtDaubechies2(torch.squeeze(x_init), wavSplit)
+
+            sens_maps = torch.permute(sens_maps, dims=(0,2,3,1))
+
+            kspace_undersampled = torch.permute(kspace_undersampled, (0,2,3,1))
+            kspace_undersampled = kspace_undersampled.unsqueeze(1)
+
+            # Forward pass
+            output = model(wx_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
+
+            # Compute target image (e.g., inverse Fourier transform of fully-sampled k-space)
+            itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            itarget = torch.permute(itarget, dims=(0, 2, 3, 1))
+            itarget1 = itarget * torch.conj(sens_maps)
+            target_image = torch.sum(itarget1, dim=-1) # dim 1 is coil dim
+            target_image = target_image.unsqueeze(1)
+
+            # Normalize both to match scale
+            output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
+            target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
+
+            loss = criterion(output.abs(), target_image.abs())
+            val_loss += loss.item()
+    return val_loss / len(val_loader.dataset)
 
 class MRIDataset(Dataset):
     def __init__(self, kspace_dir, sens_dir):
@@ -109,29 +170,56 @@ class MRIDataset(Dataset):
 
 def main():
     # Define directories (update these paths as needed)
-    kspace_dir = '/mnt/e/mri/fastMRI/brain'
-    sens_dir = '/mnt/e/mri/fastMRI/brain/sens_maps'
+
+    args = parse_args()
+    kspace_dir = os.path.join(args.data_dir)
+    sens_dir = os.path.join(args.data_dir, 'sens_maps')
+
+    os.makedirs(args.save_dir, exist_ok=True)
+    # kspace_dir = '/mnt/e/mri/fastMRI/brain'
+    # sens_dir = '/mnt/e/mri/fastMRI/brain/sens_maps'
+
+    # logging
+    logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(os.path.join(args.save_dir, "train.log"), mode='w')
+    ]
+)
 
     # Create dataset
     dataset = MRIDataset(kspace_dir=kspace_dir, sens_dir=sens_dir)
-    
+
+    # split for validation
+    val_fraction = 0.1
+    val_size = int(len(dataset) * val_fraction)
+    train_size = len(dataset) - val_size
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
     # Create DataLoader
-    dataloader = DataLoader(
-        dataset,
-        batch_size=1,          # Adjust based on GPU memory
-        shuffle=False,          # Shuffle for training TODO CHange
-        num_workers=1,         # Parallel loading (adjust based on system)
-        pin_memory=True,       # Faster GPU transfer
-        drop_last=True         # Drop incomplete batch
-    )
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True, drop_last=True)
+    
+    # dataloader = DataLoader(
+    #     dataset,
+    #     batch_size=1,          # Adjust based on GPU memory
+    #     shuffle=False,          # Shuffle for training TODO CHange
+    #     num_workers=1,         # Parallel loading (adjust based on system)
+    #     pin_memory=True,       # Faster GPU transfer
+    #     drop_last=True         # Drop incomplete batch
+    # )
 
     # Set device
-    device = torch.device('cpu')
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    logging.info(f"device chosen: {device}")
 
     # Define image size
     # sImg = [256, 256]
-    for i, data in enumerate(dataloader):
+    for i, data in enumerate(train_loader):
       k = data[0]
       sImg = k.shape[-2:]
       break
@@ -156,13 +244,14 @@ def main():
     criterion = torch.nn.MSELoss()
 
     # Training parameters
-    num_epochs = 100
+    num_epochs = args.epochs
 
     # Training loop
     model.train()
     for epoch in range(num_epochs):
         train_loss = 0.0
-        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
+        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
+        logging.info(f"Starting epoch {epoch+1}/{num_epochs} | Training samples: {len(train_loader.dataset)} | Validation samples: {len(val_loader.dataset)}")
         
         for batch_idx, (kspace, sens_maps, target) in enumerate(progress_bar):
             # Move data to device
@@ -171,11 +260,13 @@ def main():
             target = target.to(device)         
 
             # Apply undersampling mask to k-space
-            kspace_undersampled = kspace.clone()
+
             if len(mask.shape) < 3:
-                kspace_undersampled[:, :, ~mask] = 0
+                mask_exp = mask[None, None, :, :]  # (1, 1, H, W)
+                kspace_undersampled = kspace * mask_exp
             else:
-                kspace_undersampled[~mask] = 0
+                mask_exp = mask[None, :, :]  # (1, 1, H, W)
+                kspace_undersampled = kspace * mask_exp
 
             # Initialize input for the model (e.g., zero-filled reconstruction)
             ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
@@ -203,6 +294,10 @@ def main():
             target_image = torch.sum(itarget1, dim=-1) # dim 1 is coil dim
             target_image = target_image.unsqueeze(1)
 
+            # Normalize both to match scale
+            output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
+            target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
+
             # Compute loss (MSE between reconstructed and target images)
             loss = criterion(output.abs(), target_image.abs())
 
@@ -211,6 +306,14 @@ def main():
             loss.backward()
             optimizer.step()
 
+            # make sure we're well calibrated?
+            # logging.info(f"min output: {torch.min(torch.abs(output))}")
+            # logging.info(f"min target: {torch.min(torch.abs(target_image))}")
+
+            # logging.info(f"max output: {torch.max(torch.abs(output))}")
+            # logging.info(f"max target: {torch.max(torch.abs(target_image))}")
+            
+
             # Update running loss
             train_loss += loss.item() * kspace.size(0)
 
@@ -218,12 +321,18 @@ def main():
             progress_bar.set_postfix({'batch_loss': loss.item()})
 
         # Compute average epoch loss
-        epoch_loss = train_loss / len(dataloader.dataset)
-        print(f"Epoch {epoch+1}/{num_epochs}, Average Loss: {epoch_loss:.6f}")
+        epoch_loss = train_loss / len(train_loader.dataset)
+        logging.info(f"Epoch {epoch+1}/{num_epochs}, Average Loss: {epoch_loss:.6f}")
+
+        # compute validation loss
+        val_loss = evaluate(model, val_loader, device, mask, wavSplit, criterion)
+        logging.info(f"Validation Loss: {val_loss:.6f}")
 
         # Optionally save model checkpoint
         if (epoch + 1) % 10 == 0:
-            torch.save(model.state_dict(), f"checkpoint_epoch_{epoch+1}.pth")
+            checkpoint_path = os.path.join(args.save_dir, f"checkpoint_epoch_{epoch+1}.pth")
+            torch.save(model.state_dict(), checkpoint_path)
+            logging.info(f"Saved checkpoint to {checkpoint_path}")
 
     return 0
 
