@@ -129,3 +129,9 @@ wrote a bunch of the above except for the comments. run the script as
 ```
 python run_training_supervised_gpt.py --data_dir /mnt/e/mri/fastMRI/brain_small/ --save_dir /home/mcmanus/code/unrolledNet/results/ --epochs 1 
 ```
+
+Running on supercomputer
+now generate results using other networks
+
+## Zero Shot
+The paper uses a much smaller network (~500k parameters) and shares the network across unrolled blocks. worth trying if its squick

@@ -58,6 +58,8 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
   if data_consistency:
     model_fname = "dc_"+model_fname
 
+  torch.autograd.set_detect_anomaly(True)
+
   while ep < num_epochs and val_loss_tracker < val_stop_training:
     avg_train_loss = 0.0
     for jdx, tl_mask in tqdm(enumerate(tl_masks)):
@@ -304,7 +306,7 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
 
 def test_mc_gd():
   rng = np.random.default_rng(20250313)
-  data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
+  # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data.mat')
   # data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data.mat')
   kSpace = data['d2']
   kSpace = kSpace / np.max(np.abs(kSpace))
@@ -322,11 +324,11 @@ def test_mc_gd():
   kSpace2 = kSpace2.unsqueeze(1)
   
 
-  samp_fracs = [0.4, 0.25, 0.15, 0.1, 0.05]
+  samp_fracs = [0.15]
   train_fracs = [0.8]
   train_loss_split_frac = 0.8
   k_s = [50]
-  dcs = [True]
+  dcs = [False]
   val_stop_trainings = [15]
 
   for sf in samp_fracs:
@@ -389,7 +391,8 @@ def main():
   read in data and decide what to iterate over
   """
   rng = np.random.default_rng(20250313)
-  data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
+  data = sio.loadmat('/home/mcmanus/code/unrolledNet/ankle_data_smaps.mat')
+  # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
   # data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data_newsmap.mat')
   kSpace = data['d2']
   kSpace = kSpace / np.max(np.abs(kSpace))
@@ -398,7 +401,7 @@ def main():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/home/alex/Documents/research/mri/results/416_small_dc'
+  results_dir = '/home/mcmanus/code/unrolledNet/results/zs_nodc'
   # results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/416_small_dc'
 
   # mask = vdSampleMask(kSpace.shape[0:2], [30, 30], np.round(np.prod(kSpace.shape[0:2]) * 0.4))
@@ -419,11 +422,11 @@ def main():
   # us_kSpace[~mask] = 0
   # ks = torch.tensor(us_kSpace)
 
-  samp_fracs = [0.4, 0.25, 0.15]
+  samp_fracs = [0.15]
   train_fracs = [0.9]
-  train_loss_split_frac = 0.8
-  k_s = [25]
-  dcs = [ True, False]
+  train_loss_split_frac = 0.9
+  k_s = [10]
+  dcs = [True]
   val_stop_trainings = [50]
 
   for sf in samp_fracs:

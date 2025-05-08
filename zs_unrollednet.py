@@ -349,7 +349,7 @@ class unrolled_block_wav(nn.Module):
         
         gx = grad(x)
         gxNorm = torch.norm(gx.reshape(-1, 1))**2
-        alpha = 1e-4 # TODO this may need to get changed
+        alpha = 10 # TODO this may need to get changed
         rho = 0.9
         c = 0.9
         max_linesearch_iters = 250
@@ -364,7 +364,7 @@ class unrolled_block_wav(nn.Module):
                 break
             alpha *= rho
 
-        # print(f'grad_descent line search finished after {linesearch_iter} iters')
+        print(f'grad_descent line search finished after {linesearch_iter} iters')
         return xNew
     
     def prox(self, x, mask, b):
@@ -467,6 +467,10 @@ class unrolled_block_wav(nn.Module):
         gc.collect()
 
         out = torch.view_as_complex(post_unet)
+
+        # don't know if we need this or not
+        mval = torch.max(torch.abs(out))
+        out = out / mval
 
         del post_unet
         gc.collect()
