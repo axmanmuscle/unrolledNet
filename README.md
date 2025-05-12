@@ -138,3 +138,12 @@ The paper uses a much smaller network (~500k parameters) and shares the network 
 
 ## Zero Shot Unet
 Need to update saving loss plots and images
+
+
+## 05/11/2025
+memory saving stuff is running on the supercomputer
+need to make the better version of the unet and get it running?
+or the new version of zero-shot with the unrolled 
+
+okay i tried a quick and dirty zero shot with unrolled sharing a network, it didnt work
+implement just a grad desc block and then just put the nn operator in the main class? or something
