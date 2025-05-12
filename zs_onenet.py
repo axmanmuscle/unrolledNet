@@ -24,7 +24,7 @@ class prox_block(nn.Module):
         forward method for prox block
         simply to do a proximal step at the very end for data consistency
         """
-        x, mask, b = inputs
+        x, mask, b, nn = inputs
 
         # wavelet coefficients to image space
         x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
@@ -72,7 +72,7 @@ class final_block_nodc(nn.Module):
         forward method for the final block
         just return the wavelet coefficients to image space
         """
-        x, mask, b = inputs
+        x, mask, b, _ = inputs
 
         # wavelet coefficients to image space
         x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
@@ -81,15 +81,13 @@ class final_block_nodc(nn.Module):
 
 class unrolled_block(nn.Module):
     """
-    we probably need A matrix free huh
-    I might need to actually make that
+    unrolled block for single shared network
     """
     def __init__(self, sMaps, wavSplit, device, unet, dc=True):
         super(unrolled_block, self).__init__()
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
         self.device = device
-        self.nn = unet
         self.wavSplit = wavSplit
         self.dc = dc
 
@@ -161,7 +159,7 @@ class unrolled_block(nn.Module):
                 break
             alpha *= rho
 
-        print(f'grad_descent line search finished after {linesearch_iter} iters')
+        # print(f'grad_descent line search finished after {linesearch_iter} iters')
         return xNew
     
     def prox(self, x, mask, b):
@@ -205,7 +203,7 @@ class unrolled_block(nn.Module):
         So if we want A = MFS, we can fix F and S at construct time
         and just vary M on the forward method
         """
-        x, mask, b = inputs # unpack
+        x, mask, b, nn = inputs # unpack
         def applyM(x):
           out = x
           if len(mask.shape) < 3:
@@ -256,7 +254,7 @@ class unrolled_block(nn.Module):
         # gc.collect()
         torch.cuda.empty_cache()
 
-        post_unet = self.nn(out_r)
+        post_unet = nn(out_r)
         post_unet_r = post_unet[..., :n, :]
         post_unet_im = post_unet[..., n:, :]
 
@@ -279,14 +277,7 @@ class unrolled_block(nn.Module):
         # back to wavelet coeffs
         out = self.applyW(out)
 
-        return out, mask, b
-
-class grad_desc_block(nn.Module):
-    """
-    implement just grad descent
-    """
-    def forward(self):
-        return 0
+        return out, mask, b, nn
 
 
 class ZS_Unrolled_Network_onenet(nn.Module):
@@ -296,13 +287,14 @@ class ZS_Unrolled_Network_onenet(nn.Module):
         self.device = device
         self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
         self.dc = dc
-        self.unet = build_unet(sImg[1])
+        # self.unet = build_unet(sImg[1])
+        self.unet = build_unet_small(sImg[1])
         mod = []
         if len(sMaps) == 0: # single coil
             assert False, 'single coil not implemented for wavelets yet'
         else: # multicoil
             for i in range(n):
-                mod.append(unrolled_block(sMaps, self.wavSplit, device, self.unet, dc))
+                mod.append(unrolled_block(sMaps, self.wavSplit, device, dc))
             if dc:
                 mod.append(prox_block(sMaps, device, self.wavSplit))
             else:
@@ -311,7 +303,7 @@ class ZS_Unrolled_Network_onenet(nn.Module):
         self.model = nn.Sequential(*mod)
 
     def forward(self, inputs, mask, b):
-      return self.model((inputs, mask, b))
+      return self.model((inputs, mask, b, self.unet))
     
 
 if __name__ == "__main__":
@@ -335,8 +327,9 @@ if __name__ == "__main__":
 
     mask = utils.vdSampleMask(sImg, [30, 30], np.round(np.prod(sImg) * 0.4))
     # b = kSpace * mask
-    d = torch.device("cpu")
+    d = torch.device("cuda")
+    sMaps = sMaps.to(d)
 
     model = ZS_Unrolled_Network_onenet([256, 256], d, sMaps, n=10 )
 
-    print(summary(model, [kSpace.shape[0:4], mask.shape, sMaps.shape], dtypes=[torch.complex64, torch.bool, torch.complex64], device="cpu"))
+    print(summary(model, [kSpace.shape[0:4], mask.shape, sMaps.shape], dtypes=[torch.complex64, torch.bool, torch.complex64], device="cuda"))
