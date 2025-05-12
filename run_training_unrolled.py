@@ -15,7 +15,10 @@ from zs_unrollednet import ZS_Unrolled_Network, ZS_Unrolled_Network_gd, ZS_Unrol
 import matplotlib.pyplot as plt
 import scipy.io as sio
 import gc
+from torch.profiler import profile, record_function, ProfilerActivity
 
+def log_memory(label):
+    print(f"{label}: GPU memory allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MB")
 
 def training_loop(training_data, val_data, val_mask, tl_masks,
                   model, loss_fun, sMaps, optimizer, data_consistency, 
@@ -36,7 +39,6 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
   val_data = val_data.to(device)
   val_mask = val_mask.to(device)
 
-  ## TODO these lines are broken
   if data_consistency:
     training_mask = torch.abs(training_data) > 0
     all_tdata_consistency = training_data
@@ -260,7 +262,7 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     print('multi coil')
     sMaps = sMaps.to(device)
     if wavelets:
-      model = ZS_Unrolled_Network_wavelets(sImg, device, sMaps, 2, dc=dc)
+      model = ZS_Unrolled_Network_wavelets(sImg, device, sMaps, 5, dc=dc)
       # model = ZS_Unrolled_Network_gd(sImg, device,sMaps, 20) 
       # model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
 
@@ -401,7 +403,7 @@ def main():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/home/mcmanus/code/unrolledNet/results/zs_nodc'
+  results_dir = '/home/mcmanus/code/unrolledNet/results/zs_ankle'
   # results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/416_small_dc'
 
   # mask = vdSampleMask(kSpace.shape[0:2], [30, 30], np.round(np.prod(kSpace.shape[0:2]) * 0.4))
@@ -425,7 +427,7 @@ def main():
   samp_fracs = [0.15]
   train_fracs = [0.9]
   train_loss_split_frac = 0.9
-  k_s = [10]
+  k_s = [3]
   dcs = [True]
   val_stop_trainings = [50]
 
@@ -437,7 +439,7 @@ def main():
 
             run_training(kSpace2, sImg, sImg, sMaps, rng, 
                       sf, tf, train_loss_split_frac, 
-                      k, dc, results_dir, vst, 75)
+                      k, dc, results_dir, vst, 3)
   return 0
   
 if __name__ == "__main__":

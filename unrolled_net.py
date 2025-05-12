@@ -258,20 +258,22 @@ class unrolled_block(nn.Module):
         # adjoint testing
         # self.sMaps = self.sMaps.to(torch.complex128)
         # err = math_utils.test_adjoint_torch(x.to(torch.complex128), applyA)
-        out = self.grad_desc(x, applyA, b)
+        with torch.no_grad():
+            out = self.grad_desc(x, applyA, b)
 
-        if self.dc:
-            out = self.prox(out, mask, b, sMaps)
+            if self.dc:
+                out = self.prox(out, mask, b, sMaps)
 
-        # wavelets to image space
-        out = self.applyW(out, 'transp')
+            # wavelets to image space
+            out = self.applyW(out, 'transp')
 
         out = torch.view_as_real(out)
         n = out.shape[-3]
         out_r = torch.cat((out[..., 0], out[..., 1]), dim=2)
 
         del out # memory management
-        gc.collect()
+        # gc.collect()
+        torch.cuda.empty_cache()
 
         post_unet = self.nn(out_r)
         post_unet_r = post_unet[..., :n, :]
@@ -280,12 +282,14 @@ class unrolled_block(nn.Module):
         post_unet = torch.stack((post_unet_r, post_unet_im), dim=-1)
         
         del post_unet_r, post_unet_im
-        gc.collect()
+        # gc.collect()
+        torch.cuda.empty_cache()
 
         out = torch.view_as_complex(post_unet)
 
         del post_unet
-        gc.collect()
+        # gc.collect()
+        torch.cuda.empty_cache()
 
         # back to wavelet coeffs
         out = self.applyW(out)
