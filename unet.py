@@ -69,6 +69,7 @@ class decoder_block(nn.Module):
 
     def forward(self, inputs, skip):
         x = self.up(inputs)
+        # print(f'decoder block. x shape: {x.shape}, skip shape: {skip.shape}')
         x = torch.cat([x, skip], axis=1)
         x = self.conv(x)
         return x

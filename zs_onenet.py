@@ -289,8 +289,8 @@ class unrolled_block(nn.Module):
         out = torch.view_as_complex(post_unet)
 
         # don't know if we need this or not
-        mval = torch.max(torch.abs(out))
-        out = out / mval
+        # mval = torch.max(torch.abs(out))
+        # out = out / mval
 
         del post_unet
         # gc.collect()
