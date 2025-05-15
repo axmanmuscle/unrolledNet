@@ -386,13 +386,55 @@ def test_sc():
                       sf, tf, train_loss_split_frac, 
                       k, dc, results_dir, vst, 100)
 
+def fetalData():
+  rng = np.random.default_rng(20250515)
+
+  kspace_data = sio.loadmat('/home/alex/Documents/MATLAB/fetalData/slice80.mat')
+  smaps_data = sio.loadmat('/home/alex/Documents/MATLAB/fetalData/slice80_smaps_shift.mat')
+
+  kSpace = kspace_data["slice80"]
+  kSpace = kSpace / np.max(np.abs(kSpace))
+  sMaps = smaps_data['smaps']
+  sMaps = sMaps / np.max(np.abs(sMaps))
+
+  sImg = kSpace.shape[0:2]
+
+  results_dir = '/home/alex/Documents/research/mri/results/fetalData'
+
+  nBatch = 1
+  sMaps = torch.tensor(sMaps, dtype=torch.complex64)
+  kSpace2 = torch.zeros(nBatch, *kSpace.shape, dtype=torch.complex64)
+
+  for i in range(nBatch):
+      kSpace2[i, ...] = torch.tensor(kSpace)
+
+
+  kSpace2 = kSpace2.unsqueeze(1)
+
+  train_fracs = [0.925]
+  train_loss_split_frac = 0.9
+  k_s = [25]
+  dcs = [True]
+  val_stop_trainings = [50]
+
+  for tf in train_fracs:
+    for k in k_s:
+      for vst in val_stop_trainings:
+        for dc in dcs:
+
+          run_training(kSpace2, sImg, sImg, sMaps, rng, 
+                    sf, tf, train_loss_split_frac, 
+                    k, dc, results_dir, vst, 75)
+  return 0
+
+
 def main():
   """
   read in data and decide what to iterate over
   """
   rng = np.random.default_rng(20250313)
-  data = sio.loadmat('/home/mcmanus/code/unrolledNet/ankle_data_smaps.mat')
-  # data = sio.loadmat('/home/alex/Documents/research/mri/data/brain_data_newsmap.mat')
+  # data = sio.loadmat('/home/mcmanus/code/unrolledNet/ankle_data_smaps.mat')
+  data = sio.loadmat('/home/alex/Documents/research/mri/data/ankle_data_smaps.mat')
   # data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data_newsmap.mat')
   kSpace = data['d2']
   kSpace = kSpace / np.max(np.abs(kSpace))
@@ -401,7 +443,8 @@ def main():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/home/mcmanus/code/unrolledNet/results/zs_nodc'
+  results_dir = '/home/alex/Documents/research/mri/results/ankle'
+  # results_dir = '/home/mcmanus/code/unrolledNet/results/zs_nodc'
   # results_dir = '/Users/alex/Documents/School/Research/Dwork/dataConsistency/results/416_small_dc'
 
   # mask = vdSampleMask(kSpace.shape[0:2], [30, 30], np.round(np.prod(kSpace.shape[0:2]) * 0.4))
@@ -425,7 +468,7 @@ def main():
   samp_fracs = [0.15]
   train_fracs = [0.9]
   train_loss_split_frac = 0.9
-  k_s = [10]
+  k_s = [25]
   dcs = [True]
   val_stop_trainings = [50]
 
@@ -441,6 +484,7 @@ def main():
   return 0
   
 if __name__ == "__main__":
+  # fetalData()
   main()
   # test_mc_gd()
   # test_sc()
