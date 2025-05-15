@@ -15,7 +15,11 @@ from zs_unrollednet import ZS_Unrolled_Network, ZS_Unrolled_Network_gd, ZS_Unrol
 import matplotlib.pyplot as plt
 import scipy.io as sio
 import gc
+from torch.profiler import profile, record_function, ProfilerActivity
+from zs_onenet import ZS_Unrolled_Network_onenet
 
+def log_memory(label):
+    print(f"{label}: GPU memory allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MB")
 
 def training_loop(training_data, val_data, val_mask, tl_masks,
                   model, loss_fun, sMaps, optimizer, data_consistency, 
@@ -36,7 +40,6 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
   val_data = val_data.to(device)
   val_mask = val_mask.to(device)
 
-  ## TODO these lines are broken
   if data_consistency:
     training_mask = torch.abs(training_data) > 0
     all_tdata_consistency = training_data
@@ -157,7 +160,7 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
 
     if not os.path.isdir(img_dir):
       os.mkdir(img_dir)
-    plt.imsave(os.path.join(img_dir, tstr), np.abs( oc ), cmap='grey')
+    plt.imsave(os.path.join(img_dir, tstr), np.abs( oc ), cmap='gray')
 
     plt.clf()
     del all_im, out, oc
@@ -194,7 +197,7 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
 
   #im = math_utils.kspace_to_imspace(oc)
   #plt.imshow( np.abs( im ), cmap='grey')
-  plt.imsave(os.path.join(directory, tstr), np.abs( oc ), cmap='grey')
+  plt.imsave(os.path.join(directory, tstr), np.abs( oc ), cmap='gray')
 
   plt.clf()
 
@@ -213,7 +216,7 @@ def test_only_gd(ks, model, directory, mask):
   oc = np.squeeze(out.detach().numpy())
 
   tstr = 'dc_output.png'
-  plt.imsave(os.path.join(directory, tstr), np.abs( oc ), cmap='grey')
+  plt.imsave(os.path.join(directory, tstr), np.abs( oc ), cmap='gray')
 
   plt.clf()
 
@@ -260,7 +263,8 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
     print('multi coil')
     sMaps = sMaps.to(device)
     if wavelets:
-      model = ZS_Unrolled_Network_wavelets(sImg, device, sMaps, 2, dc=dc)
+      model = ZS_Unrolled_Network_onenet(sImg, device, sMaps, 10, dc=dc)
+      # model = ZS_Unrolled_Network_wavelets(sImg, device, sMaps, 5, dc=dc)
       # model = ZS_Unrolled_Network_gd(sImg, device,sMaps, 20) 
       # model = ZS_Unrolled_Network(sImg, device,sMaps, 3)    
 
@@ -285,16 +289,16 @@ def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac,
 
   if sc:
     oc = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( sub_kspace, axes=(-1,-2)),  axes=(-1,-2) ), axes=(-1,-2))
-    plt.imsave(os.path.join(directory, 'zero_filled.png'), np.abs( np.squeeze( oc ) ), cmap='grey')
+    plt.imsave(os.path.join(directory, 'zero_filled.png'), np.abs( np.squeeze( oc ) ), cmap='gray')
     oc = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( ks, axes=(-1,-2)),  axes=(-1,-2) ), axes=(-1,-2))
-    plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( oc ) ), cmap='grey')
+    plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( oc ) ), cmap='gray')
 
   else:
     oc = np.sum(np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( sub_kspace, axes=(2,3)),  axes=(2,3) ), axes=(2,3)), axis=-1)
-    plt.imsave(os.path.join(directory, 'zero_filled.png'), np.abs( np.squeeze( oc ) ), cmap='grey')
+    plt.imsave(os.path.join(directory, 'zero_filled.png'), np.abs( np.squeeze( oc ) ), cmap='gray')
     oc = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( ks, axes=(2,3)),  axes=(2,3) ), axes=(2,3))
     im = utils.mri_reconRoemer(np.squeeze(oc), sMaps.cpu().numpy())
-    plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( im ) ), cmap='grey')
+    plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( im ) ), cmap='gray')
 
   # test_only_gd(sub_kspace, model, directory, torch.tensor(usMask > 0))
   ## i think we need this even when DC is false bc of the way i wrote the model
@@ -466,7 +470,7 @@ def main():
   # ks = torch.tensor(us_kSpace)
 
   samp_fracs = [0.15]
-  train_fracs = [0.9]
+  train_fracs = [0.95]
   train_loss_split_frac = 0.9
   k_s = [25]
   dcs = [True]
@@ -480,7 +484,7 @@ def main():
 
             run_training(kSpace2, sImg, sImg, sMaps, rng, 
                       sf, tf, train_loss_split_frac, 
-                      k, dc, results_dir, vst, 75)
+                      k, dc, results_dir, vst, 100)
   return 0
   
 if __name__ == "__main__":

@@ -309,7 +309,8 @@ class unrolled_block_wav(nn.Module):
             out[..., :, :] = math_utils.wtDaubechies2(torch.squeeze(x), self.wavSplit)
 
         del x
-        gc.collect()
+        torch.cuda.empty_cache()
+        # gc.collect()
         
         return out
     
@@ -349,7 +350,7 @@ class unrolled_block_wav(nn.Module):
         
         gx = grad(x)
         gxNorm = torch.norm(gx.reshape(-1, 1))**2
-        alpha = 10 # TODO this may need to get changed
+        alpha = 0.5 # TODO this may need to get changed
         rho = 0.9
         c = 0.9
         max_linesearch_iters = 250
@@ -442,20 +443,22 @@ class unrolled_block_wav(nn.Module):
         # adjoint testing
         # self.sMaps = self.sMaps.to(torch.complex128)
         # err = math_utils.test_adjoint_torch(x.to(torch.complex128), applyA)
-        out = self.grad_desc(x, applyA, b)
+        with torch.no_grad(): ## helps immensely 
+            out = self.grad_desc(x, applyA, b)
 
-        if self.dc:
-            out = self.prox(out, mask, b)
+            if self.dc:
+                out = self.prox(out, mask, b)
 
-        # wavelets to image space
-        out = self.applyW(out, 'transp')
+            # wavelets to image space
+            out = self.applyW(out, 'transp')
 
         out = torch.view_as_real(out)
         n = out.shape[-3]
         out_r = torch.cat((out[..., 0], out[..., 1]), dim=2)
 
         del out # memory management
-        gc.collect()
+        # gc.collect()
+        torch.cuda.empty_cache()
 
         post_unet = self.nn(out_r)
         post_unet_r = post_unet[..., :n, :]
@@ -464,7 +467,8 @@ class unrolled_block_wav(nn.Module):
         post_unet = torch.stack((post_unet_r, post_unet_im), dim=-1)
         
         del post_unet_r, post_unet_im
-        gc.collect()
+        # gc.collect()
+        torch.cuda.empty_cache()
 
         out = torch.view_as_complex(post_unet)
 
@@ -473,7 +477,8 @@ class unrolled_block_wav(nn.Module):
         out = out / mval
 
         del post_unet
-        gc.collect()
+        # gc.collect()
+        torch.cuda.empty_cache()
 
         # back to wavelet coeffs
         out = self.applyW(out)

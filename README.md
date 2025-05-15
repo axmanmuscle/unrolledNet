@@ -133,5 +133,20 @@ python run_training_supervised_gpt.py --data_dir /mnt/e/mri/fastMRI/brain_small/
 Running on supercomputer
 now generate results using other networks
 
-## Zero Shot
-The paper uses a much smaller network (~500k parameters) and shares the network across unrolled blocks. worth trying if its squick
+## Zero Shot Unrolled
+The paper uses a much smaller network (~500k parameters) and shares the network across unrolled blocks. worth trying if its quick
+
+## Zero Shot Unet
+Need to update saving loss plots and images
+
+
+## 05/11/2025
+memory saving stuff is running on the supercomputer
+need to make the better version of the unet and get it running?
+or the new version of zero-shot with the unrolled 
+
+okay i tried a quick and dirty zero shot with unrolled sharing a network, it didnt work
+implement just a grad desc block and then just put the nn operator in the main class? or something
+
+## 05/12/2025
+The one u-net unrolled network looks like its set up properly, probably worth trying to train or something

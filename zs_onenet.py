@@ -1,25 +1,3 @@
-"""
-formulation of the unrolled network for supervised learning
-
-In this case we'll unroll proximal gradient descent and replace the proximal steps with a neural network (?)
-in fact we're going to do FISTA, which is proximal gradient descent with momentum
-
-FISTA solves problems of the form 
-min f(x) + g(x)
- x
-where f is smooth and g has a simple proximal operator
-FISTA iterations:
-y_k+1 = y_k - alpha_k(gradf(y_k))
-z_k+1 = prox_(gamma_k g)(y_k+1)
-t_k+1 = 0.5 * (1 + sqrt(1 + 4t_k^2))
-x_k+1 = z_k+1 + (t_k - 1)/t_k+1 * (z_k+1 - z_k)
-
-we're going to solve
-min 0.5 * || Ax - b ||_2^2 st || Ax - b ||^2 <= eps
-
-with A = MFS
-Seems strange but the grad descent will impact all of the image x and the constraint will enforce data consistency
-"""
 import torch
 import torch.nn as nn
 import numpy as np
@@ -34,9 +12,11 @@ class prox_block(nn.Module):
     just a module for the proximal block
     """
 
-    def __init__(self, device, wavSplit):
+    def __init__(self, sMaps, device, wavSplit):
         super(prox_block, self).__init__()
         self.device = device
+        self.sMaps = sMaps
+        self.nCoils = sMaps.shape[-1]
         self.wavSplit = wavSplit
 
     def forward(self, inputs):
@@ -44,22 +24,21 @@ class prox_block(nn.Module):
         forward method for prox block
         simply to do a proximal step at the very end for data consistency
         """
-        x, mask, b, sMaps = inputs
+        x, mask, b, nn = inputs
 
-        nCoils = sMaps.shape[-1]
         # wavelet coefficients to image space
         x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
 
         x = x[None, None, :, :]
 
-        out = torch.zeros(size = [*x.shape, nCoils], dtype=sMaps.dtype, device = self.device)
+        out = torch.zeros(size = [*x.shape, self.nCoils], dtype=self.sMaps.dtype, device = self.device)
 
         if len(x.shape) == 4:
-            sm = sMaps.unsqueeze(0)
+            sm = self.sMaps.unsqueeze(0)
         else:
-            sm = sMaps
+            sm = self.sMaps
 
-        for i in range(nCoils):
+        for i in range(self.nCoils):
             out[...,i] = sm[...,i] * x
 
         out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
@@ -76,15 +55,16 @@ class prox_block(nn.Module):
 
         return out
 
-
 class final_block_nodc(nn.Module):
     """
     final block for the wavelet network
     """
 
-    def __init__(self, device, wavSplit):
+    def __init__(self, sMaps, device, wavSplit):
         super(final_block_nodc, self).__init__()
         self.device = device
+        self.sMaps = sMaps
+        self.nCoils = sMaps.shape[-1]
         self.wavSplit = wavSplit
 
     def forward(self, inputs):
@@ -92,7 +72,7 @@ class final_block_nodc(nn.Module):
         forward method for the final block
         just return the wavelet coefficients to image space
         """
-        x, mask, b = inputs
+        x, mask, b, _ = inputs
 
         # wavelet coefficients to image space
         x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
@@ -101,13 +81,13 @@ class final_block_nodc(nn.Module):
 
 class unrolled_block(nn.Module):
     """
-    we probably need A matrix free huh
-    I might need to actually make that
+    unrolled block for single shared network
     """
-    def __init__(self, shape, wavSplit, device, dc=True):
+    def __init__(self, sMaps, wavSplit, device, unet, dc=True):
         super(unrolled_block, self).__init__()
+        self.sMaps = sMaps
+        self.nCoils = sMaps.shape[-1]
         self.device = device
-        self.nn = build_unet(shape[1])
         self.wavSplit = wavSplit
         self.dc = dc
 
@@ -123,22 +103,22 @@ class unrolled_block(nn.Module):
             out[..., :, :] = math_utils.wtDaubechies2(torch.squeeze(x), self.wavSplit)
 
         del x
-        gc.collect()
+        torch.cuda.empty_cache()
+        # gc.collect()
         
         return out
     
-    def applyS(self, x, sMaps, op='notransp'):
-        nCoils = sMaps.shape[-1]
+    def applyS(self, x, op='notransp'):
         if op == 'transp':
-            out = torch.sum( torch.conj(sMaps) * x, -1 )
+            out = torch.sum( torch.conj(self.sMaps) * x, -1 )
         else:
             # out = torch.zeros(size=[nBatch, 1, *sMaps.shape], dtype=sMaps.dtype)
-            out = torch.zeros(size = [*x.shape, nCoils], dtype=sMaps.dtype, device=self.device)
+            out = torch.zeros(size = [*x.shape, self.nCoils], dtype=self.sMaps.dtype, device=self.device)
             if len(x.shape) == 4:
-                sm = sMaps.unsqueeze(0)
+                sm = self.sMaps.unsqueeze(0)
             else:
-                sm = sMaps
-            for i in range(nCoils):
+                sm = self.sMaps
+            for i in range(self.nCoils):
                 out[..., i] = sm[...,i] * x
 
         return out
@@ -152,7 +132,7 @@ class unrolled_block(nn.Module):
 
     def grad_desc(self, x, A, b):
         """
-        expecting x is the wavelet coefficients
+        i think A has to downselect here?
         """
         def obj(xi):
            return 0.5 * torch.norm(A(xi) - b)**2
@@ -164,7 +144,7 @@ class unrolled_block(nn.Module):
         
         gx = grad(x)
         gxNorm = torch.norm(gx.reshape(-1, 1))**2
-        alpha = 1e-4 # TODO this may need to get changed
+        alpha = 0.5 # TODO this may need to get changed
         rho = 0.9
         c = 0.9
         max_linesearch_iters = 250
@@ -182,21 +162,20 @@ class unrolled_block(nn.Module):
         # print(f'grad_descent line search finished after {linesearch_iter} iters')
         return xNew
     
-    def prox(self, x, mask, b, sMaps):
+    def prox(self, x, mask, b):
         """
         apply sensitivity maps
         apply fourier transform
         replace data at mask with b
         roemer recon
         """
-        nCoils = sMaps.shape[-1]
         # out = torch.zeros(size=[self.nBatch, *self.sMaps.shape], dtype=self.sMaps.dtype)
-        out = torch.zeros(size = [*x.shape, nCoils], dtype=sMaps.dtype, device=self.device)
+        out = torch.zeros(size = [*x.shape, self.nCoils], dtype=self.sMaps.dtype, device=self.device)
         if len(x.shape) == 4:
-            sm = sMaps.unsqueeze(0)
+            sm = self.sMaps.unsqueeze(0)
         else:
-            sm = sMaps
-        for i in range(nCoils):
+            sm = self.sMaps
+        for i in range(self.nCoils):
             out[...,i] = sm[...,i] * x
 
         out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
@@ -224,7 +203,7 @@ class unrolled_block(nn.Module):
         So if we want A = MFS, we can fix F and S at construct time
         and just vary M on the forward method
         """
-        x, mask, b, sMaps = inputs # unpack
+        x, mask, b, nn = inputs # unpack
         def applyM(x):
           out = x
           if len(mask.shape) < 3:
@@ -239,7 +218,7 @@ class unrolled_block(nn.Module):
             # apply f transpose
             out = self.applyF(out, 'transp')
             # apply S transpose
-            out = self.applyS(out, sMaps, 'transp')
+            out = self.applyS(out, 'transp')
             # wavelet transform
             out = self.applyW(out)
             
@@ -247,7 +226,7 @@ class unrolled_block(nn.Module):
             # inverse wavelet transform
             out = self.applyW(x, 'transp')
             # apply S
-            out = self.applyS(out, sMaps)
+            out = self.applyS(out)
             # apply f
             out = self.applyF(out)
             # apply mask
@@ -258,11 +237,11 @@ class unrolled_block(nn.Module):
         # adjoint testing
         # self.sMaps = self.sMaps.to(torch.complex128)
         # err = math_utils.test_adjoint_torch(x.to(torch.complex128), applyA)
-        with torch.no_grad():
+        with torch.no_grad(): ## helps immensely 
             out = self.grad_desc(x, applyA, b)
 
             if self.dc:
-                out = self.prox(out, mask, b, sMaps)
+                out = self.prox(out, mask, b)
 
             # wavelets to image space
             out = self.applyW(out, 'transp')
@@ -275,7 +254,7 @@ class unrolled_block(nn.Module):
         # gc.collect()
         torch.cuda.empty_cache()
 
-        post_unet = self.nn(out_r)
+        post_unet = nn(out_r)
         post_unet_r = post_unet[..., :n, :]
         post_unet_im = post_unet[..., n:, :]
 
@@ -287,6 +266,10 @@ class unrolled_block(nn.Module):
 
         out = torch.view_as_complex(post_unet)
 
+        # don't know if we need this or not
+        mval = torch.max(torch.abs(out))
+        out = out / mval
+
         del post_unet
         # gc.collect()
         torch.cuda.empty_cache()
@@ -294,41 +277,59 @@ class unrolled_block(nn.Module):
         # back to wavelet coeffs
         out = self.applyW(out)
 
-        return out, mask, b, sMaps
+        return out, mask, b, nn
 
 
-class unrolled_net(nn.Module):
-    def __init__(self, sImg, device, n=10, dc=True, mc=True):
-        super(unrolled_net, self).__init__()
+class ZS_Unrolled_Network_onenet(nn.Module):
+    def __init__(self, sImg, device, sMaps=[], n=10, dc=True):
+        super(ZS_Unrolled_Network_onenet, self).__init__()
         self.n = n
         self.device = device
         self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
         self.dc = dc
+        # self.unet = build_unet(sImg[1])
+        self.unet = build_unet_small(sImg[1])
         mod = []
-        if not mc: # single coil
+        if len(sMaps) == 0: # single coil
             assert False, 'single coil not implemented for wavelets yet'
-            for i in range(n):
-                mod.append(unrolled_block_sc(sImg, device))
-            mod.append(prox_block_sc(device))
         else: # multicoil
             for i in range(n):
-                mod.append(unrolled_block(sImg, self.wavSplit, device, dc))
+                mod.append(unrolled_block(sMaps, self.wavSplit, device, dc))
             if dc:
-                mod.append(prox_block(device, self.wavSplit))
+                mod.append(prox_block(sMaps, device, self.wavSplit))
             else:
-                mod.append(final_block_nodc(device, self.wavSplit))
+                mod.append(final_block_nodc(sMaps, device, self.wavSplit))
 
         self.model = nn.Sequential(*mod)
 
-    def forward(self, inputs, mask, b, sMaps):
-      return self.model((inputs, mask, b, sMaps))
+    def forward(self, inputs, mask, b):
+      return self.model((inputs, mask, b, self.unet))
     
-if __name__ == "__main__":
-    device = torch.device("cpu")
-    sMaps = torch.randn([1,640,320,16]) + 1j*torch.randn([1,640,320,16])
-    kSpace = torch.randn([1,1,640,320,16]) + 1j*torch.randn([1,1,640,320,16])
-    mask = torch.randn([1,1,640,320])
-    mask = mask > 0
-    model = unrolled_net([640, 320], device, n=2 )
 
-    print(summary(model, [kSpace.shape[0:4], mask.shape[2:4], kSpace.shape, sMaps.shape], dtypes=[torch.complex64, torch.bool, torch.complex64, torch.complex64], device="cpu"))
+if __name__ == "__main__":
+    import scipy.io as sio
+
+    # test size of model
+    data = sio.loadmat('/home/mcmanus/code/unrolledNet/brain_data_newsmap.mat')
+    # data = sio.loadmat('/Users/alex/Documents/School/Research/Dwork/dataConsistency/brain_data_newsmap.mat')
+    kSpace = data['d2']
+    kSpace = kSpace / np.max(np.abs(kSpace))
+    sMaps = data['sm2']
+    sMaps = sMaps / np.max(np.abs(sMaps))
+
+    sImg = kSpace.shape[0:2]
+    sMaps = torch.tensor(sMaps)
+    kSpace = torch.tensor(kSpace)
+    kSpace = kSpace.unsqueeze(0)
+    kSpace = kSpace.unsqueeze(0)
+    kSpace = kSpace.to(torch.complex64)
+    sMaps = sMaps.to(torch.complex64)
+
+    mask = utils.vdSampleMask(sImg, [30, 30], np.round(np.prod(sImg) * 0.4))
+    # b = kSpace * mask
+    d = torch.device("cuda")
+    sMaps = sMaps.to(d)
+
+    model = ZS_Unrolled_Network_onenet([256, 256], d, sMaps, n=10 )
+
+    print(summary(model, [kSpace.shape[0:4], mask.shape, sMaps.shape], dtypes=[torch.complex64, torch.bool, torch.complex64], device="cuda"))

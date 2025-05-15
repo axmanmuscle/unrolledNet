@@ -22,6 +22,7 @@ def parse_args():
     parser.add_argument('--data_dir', type=str, required=True, help="Path to dataset root (should contain kspace and sens_maps)")
     parser.add_argument('--save_dir', type=str, default='./results', help="Directory to save checkpoints and logs")
     parser.add_argument('--epochs', type=int, default=100, help="Number of training epochs")
+    parser.add_argument('--dc', type=bool, default=True, help="Enforce Data Consistency or not")
     args = parser.parse_args()
     return args
 
@@ -226,9 +227,9 @@ def main():
 
     # Initialize model
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
-    dataconsistency = True
+    dataconsistency = args.dc
     multicoil = True
-    model = unrolled_net(sImg, device, 2, dataconsistency, multicoil)
+    model = unrolled_net(sImg, device, 5, dataconsistency, multicoil)
     model = model.to(device)
 
     # Define optimizer
@@ -330,7 +331,11 @@ def main():
 
         # Optionally save model checkpoint
         if (epoch + 1) % 10 == 0:
-            checkpoint_path = os.path.join(args.save_dir, f"checkpoint_epoch_{epoch+1}.pth")
+            if dataconsistency:
+                tstr = f"dc_checkpoint_epoch_{epoch+1}.pth"
+            else:
+                tstr = f"checkpoint_epoch_{epoch+1}.pth"
+            checkpoint_path = os.path.join(args.save_dir, tstr)
             torch.save(model.state_dict(), checkpoint_path)
             logging.info(f"Saved checkpoint to {checkpoint_path}")
 
