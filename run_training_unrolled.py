@@ -24,7 +24,7 @@ def log_memory(label):
 def training_loop(training_data, val_data, val_mask, tl_masks,
                   model, loss_fun, sMaps, optimizer, data_consistency, 
                   val_stop_training = 15, num_epochs = 50, device = torch.device('cpu'),
-                  directory=os.getcwd()):
+                  directory=os.getcwd(), co=False):
   """
   todo:
     - the data in is undersampled k-space. split into train and validation (oh this should be done earlier)
@@ -85,7 +85,10 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
         if sc:
           im = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( tdata, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
         else:
-          im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( tdata, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
+          if co:
+            im = torch.sum( torch.fft.ifftn( torch.fft.fftshift( tdata, dim=(2,3) ), norm='ortho', dim=(2,3) ), -1)
+          else:
+            im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( tdata, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
         
         ## for wavelets
         wavSplit = torch.tensor(math_utils.makeWavSplit(torch.squeeze(im).shape))
@@ -109,7 +112,10 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
       if sc:
         val_im = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( training_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
       else:
-        val_im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( training_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
+        if co:
+          val_im = torch.sum( torch.fft.ifftn( torch.fft.fftshift( training_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), -1)
+        else:
+          val_im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( training_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
       val_out = model(val_im, training_mask, all_tdata_consistency)
     else:
       val_out = model(training_data)
@@ -150,7 +156,10 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
     if sc:
       all_im = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
     else:
-      all_im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
+      if co:
+        all_im = torch.sum( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), -1)
+      else:
+        all_im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
     out = model(all_im, alldata_mask, alldata_consistency)
     tstr = f'output_epoch{ep}.png'
 
@@ -184,7 +193,10 @@ def training_loop(training_data, val_data, val_mask, tl_masks,
     if sc:
       all_im = torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
     else:
-      all_im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
+      if co:
+        all_im = torch.sum(  torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), -1)
+      else:
+        all_im = torch.sum( torch.fft.ifftshift( torch.fft.ifftn( torch.fft.fftshift( all_data, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) ), -1)
       
     out = model(all_im, alldata_mask, alldata_consistency)
     tstr = 'dc_output.png'
@@ -224,10 +236,11 @@ def run_training_fetalData(ks, sImg, sMaps, rng, train_frac,
                  train_loss_split_frac, k, dc, results_dir,
                  val_stop_training, num_epochs=100):
                    
-  usMask = torch.abs(ks) > 0
+  usMask = torch.abs(torch.squeeze(ks[..., 0])) > 0
+  usMask = usMask.to(torch.float32)
   numSamps = torch.sum(usMask)
   samp_frac = numSamps / np.prod(sImg)
-  train_mask, val_mask = utils.mask_split(usMask, rng, train_frac)
+  train_mask, val_mask = utils.mask_split(usMask.numpy(), rng, train_frac)
 
   sub_kspace = torch.tensor( usMask[:, :, np.newaxis] ) * ks
   training_kspace = torch.tensor( train_mask[:, :, np.newaxis] ) * ks
@@ -239,7 +252,7 @@ def run_training_fetalData(ks, sImg, sMaps, rng, train_frac,
   print('multi coil')
   print('running with zs unrolled sharing the network')
   sMaps = sMaps.to(device)
-  model = ZS_Unrolled_Network_onenet(sImg, device, sMaps, 10, dc=dc)
+  model = ZS_Unrolled_Network_onenet(sImg, device, sMaps, 10, dc=dc, cornerOrigin=True)
 
   model = model.to(device)
   optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
@@ -257,9 +270,9 @@ def run_training_fetalData(ks, sImg, sMaps, rng, train_frac,
   if not os.path.isdir(directory):
     os.mkdir(directory)
 
-  oc = np.sum(np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( sub_kspace, axes=(2,3)),  axes=(2,3) ), axes=(2,3)), axis=-1)
+  oc = np.sum(np.fft.ifftn( np.fft.fftshift( sub_kspace, axes=(2,3)),  axes=(2,3) ), axis=-1)
   plt.imsave(os.path.join(directory, 'zero_filled.png'), np.abs( np.squeeze( oc ) ), cmap='gray')
-  oc = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( ks, axes=(2,3)),  axes=(2,3) ), axes=(2,3))
+  oc = np.fft.ifftn( np.fft.fftshift( ks, axes=(2,3)),  axes=(2,3) )
   im = utils.mri_reconRoemer(np.squeeze(oc), sMaps.cpu().numpy())
   plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( im ) ), cmap='gray')
 
@@ -269,7 +282,7 @@ def run_training_fetalData(ks, sImg, sMaps, rng, train_frac,
   training_loop(training_kspace, val_kspace, val_mask, tl_masks,
               model, math_utils.unrolled_loss_mixed, sMaps, optimizer, dc, 
               val_stop_training, num_epochs, device,
-              directory)
+              directory, co = True)
 
 def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac, 
                  train_loss_split_frac, k, dc, results_dir,
@@ -454,7 +467,7 @@ def fetalData():
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/home/alex/Documents/research/mri/results/fetalData'
+  results_dir = '/home/alex/Documents/research/mri/results/fetalData/newBatch'
 
   nBatch = 1
   sMaps = torch.tensor(sMaps, dtype=torch.complex64)
@@ -477,7 +490,7 @@ def fetalData():
       for vst in val_stop_trainings:
         for dc in dcs:
 
-          run_training(kSpace2, sImg, sMaps, rng, 
+          run_training_fetalData(kSpace2, sImg, sMaps, rng, 
                     tf, train_loss_split_frac, 
                     k, dc, results_dir, vst, 75)
   return 0
@@ -539,7 +552,7 @@ def main():
   return 0
   
 if __name__ == "__main__":
-  # fetalData()
-  main()
+  fetalData()
+  # main()
   # test_mc_gd()
   # test_sc()
