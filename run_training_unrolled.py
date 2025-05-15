@@ -220,6 +220,57 @@ def test_only_gd(ks, model, directory, mask):
 
   plt.clf()
 
+def run_training_fetalData(ks, sImg, sMaps, rng, train_frac, 
+                 train_loss_split_frac, k, dc, results_dir,
+                 val_stop_training, num_epochs=100):
+                   
+  usMask = torch.abs(ks) > 0
+  numSamps = torch.sum(usMask)
+  samp_frac = numSamps / np.prod(sImg)
+  train_mask, val_mask = utils.mask_split(usMask, rng, train_frac)
+
+  sub_kspace = torch.tensor( usMask[:, :, np.newaxis] ) * ks
+  training_kspace = torch.tensor( train_mask[:, :, np.newaxis] ) * ks
+  val_kspace = torch.tensor( val_mask[:, :, np.newaxis] ) * ks
+  val_mask = torch.tensor(val_mask)
+
+  device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+  print('multi coil')
+  print('running with zs unrolled sharing the network')
+  sMaps = sMaps.to(device)
+  model = ZS_Unrolled_Network_onenet(sImg, device, sMaps, 10, dc=dc)
+
+  model = model.to(device)
+  optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
+
+  tl_masks = []
+  for idx in range(k):
+    tm, lm = utils.mask_split(train_mask, rng, train_loss_split_frac)
+    tl_masks.append((tm, lm))
+
+  directory = f'vd_sf{int(samp_frac*100)}p_tf{int(train_frac*100)}p_k{k}_vst{val_stop_training}'
+  if dc:
+    directory = "dc_" + directory
+  directory = os.path.join(results_dir, directory)
+
+  if not os.path.isdir(directory):
+    os.mkdir(directory)
+
+  oc = np.sum(np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( sub_kspace, axes=(2,3)),  axes=(2,3) ), axes=(2,3)), axis=-1)
+  plt.imsave(os.path.join(directory, 'zero_filled.png'), np.abs( np.squeeze( oc ) ), cmap='gray')
+  oc = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( ks, axes=(2,3)),  axes=(2,3) ), axes=(2,3))
+  im = utils.mri_reconRoemer(np.squeeze(oc), sMaps.cpu().numpy())
+  plt.imsave(os.path.join(directory, 'gt.png'), np.abs( np.squeeze( im ) ), cmap='gray')
+
+  # test_only_gd(sub_kspace, model, directory, torch.tensor(usMask > 0))
+  ## i think we need this even when DC is false bc of the way i wrote the model
+  dc = True
+  training_loop(training_kspace, val_kspace, val_mask, tl_masks,
+              model, math_utils.unrolled_loss_mixed, sMaps, optimizer, dc, 
+              val_stop_training, num_epochs, device,
+              directory)
+
 def run_training(ks, sImg, sMask, sMaps, rng, samp_frac, train_frac, 
                  train_loss_split_frac, k, dc, results_dir,
                  val_stop_training, num_epochs=100):
@@ -426,8 +477,8 @@ def fetalData():
       for vst in val_stop_trainings:
         for dc in dcs:
 
-          run_training(kSpace2, sImg, sImg, sMaps, rng, 
-                    sf, tf, train_loss_split_frac, 
+          run_training(kSpace2, sImg, sMaps, rng, 
+                    tf, train_loss_split_frac, 
                     k, dc, results_dir, vst, 75)
   return 0
 
