@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from unet import build_unet ,build_unet_small
+from unet import build_unet,build_unet_small,build_unet_smaller
 from torchinfo import summary
 import gc
 import utils
@@ -12,12 +12,13 @@ class prox_block(nn.Module):
     just a module for the proximal block
     """
 
-    def __init__(self, sMaps, device, wavSplit):
+    def __init__(self, sMaps, device, wavSplit, cornerOrigin):
         super(prox_block, self).__init__()
         self.device = device
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
         self.wavSplit = wavSplit
+        self.cornerOrigin = cornerOrigin
 
     def forward(self, inputs):
         """
@@ -41,14 +42,20 @@ class prox_block(nn.Module):
         for i in range(self.nCoils):
             out[...,i] = sm[...,i] * x
 
-        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+        if self.cornerOrigin:
+          out = torch.fft.fftshift( torch.fft.fftn( out , norm='ortho', dim=(2,3) ), dim=(2,3) )
+        else:
+          out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
 
         if len(mask.shape) < 3:
           out[..., mask, :] = b[..., mask, :]
         else:
           out[mask] = b[mask]
 
-        out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
+        if self.cornerOrigin:
+          out = torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) )
+        else:
+          out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
         out = torch.sum( torch.conj(sm) * out, -1 ) #roemer
 
         #out = torch.view_as_real(out)
@@ -83,13 +90,14 @@ class unrolled_block(nn.Module):
     """
     unrolled block for single shared network
     """
-    def __init__(self, sMaps, wavSplit, device, unet, dc=True):
+    def __init__(self, sMaps, wavSplit, device, unet, dc=True, cornerOrigin=False):
         super(unrolled_block, self).__init__()
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
         self.device = device
         self.wavSplit = wavSplit
         self.dc = dc
+        self.cornerOrigin = cornerOrigin
 
     def applyW(self, x, op='notransp'):
         """
@@ -125,8 +133,14 @@ class unrolled_block(nn.Module):
 
     def applyF(self, x, op='notransp'):
         if op == 'transp':
+          if self.cornerOrigin:
+            out = torch.fft.ifftn( torch.fft.ifftshift( x, dim=(2,3) ), norm='ortho', dim=(2,3) )
+          else:
             out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( x, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
         else:
+          if self.cornerOrigin:
+            out = torch.fft.fftshift( torch.fft.fftn( x, norm='ortho', dim=(2,3) ), dim=(2,3) )
+          else:
             out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( x, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
         return out
 
@@ -178,7 +192,11 @@ class unrolled_block(nn.Module):
         for i in range(self.nCoils):
             out[...,i] = sm[...,i] * x
 
-        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
+        if self.cornerOrigin:
+          out = torch.fft.fftshift( torch.fft.fftn( out, norm='ortho',\
+                                                 dim = (2,3) ), dim=(2,3) )
+        else:
+          out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
                                                  dim = (2,3) ), dim=(2,3) )
 
         if len(mask.shape) < 3:
@@ -186,7 +204,11 @@ class unrolled_block(nn.Module):
         else:
           out[mask] = b[mask]
         
-        out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
+        if self.cornerOrigin:
+          out = torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
+                                                 dim = (2,3) )
+        else:
+          out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
                                                  dim = (2,3) ), dim=(2,3) )
 
         out = torch.sum( torch.conj(sm) * out, -1 ) #roemer
@@ -267,8 +289,8 @@ class unrolled_block(nn.Module):
         out = torch.view_as_complex(post_unet)
 
         # don't know if we need this or not
-        mval = torch.max(torch.abs(out))
-        out = out / mval
+        # mval = torch.max(torch.abs(out))
+        # out = out / mval
 
         del post_unet
         # gc.collect()
@@ -281,22 +303,23 @@ class unrolled_block(nn.Module):
 
 
 class ZS_Unrolled_Network_onenet(nn.Module):
-    def __init__(self, sImg, device, sMaps=[], n=10, dc=True):
+    def __init__(self, sImg, device, sMaps=[], n=10, dc=True, cornerOrigin=False):
         super(ZS_Unrolled_Network_onenet, self).__init__()
         self.n = n
         self.device = device
         self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
         self.dc = dc
         # self.unet = build_unet(sImg[1])
-        self.unet = build_unet_small(sImg[1])
+        self.unet = build_unet_smaller(sImg[1])
+        self.cornerOrigin = cornerOrigin # the fetal data origin in image space is in the corner
         mod = []
         if len(sMaps) == 0: # single coil
             assert False, 'single coil not implemented for wavelets yet'
         else: # multicoil
             for i in range(n):
-                mod.append(unrolled_block(sMaps, self.wavSplit, device, dc))
+                mod.append(unrolled_block(sMaps, self.wavSplit, device, dc, cornerOrigin))
             if dc:
-                mod.append(prox_block(sMaps, device, self.wavSplit))
+                mod.append(prox_block(sMaps, device, self.wavSplit, cornerOrigin))
             else:
                 mod.append(final_block_nodc(sMaps, device, self.wavSplit))
 

@@ -1,16 +1,34 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from torchinfo import summary
+import torch.nn.functional as F
+
+class UpConvBlock(nn.Module):
+  """
+  proof of concept for replacing conv transpose 2d
+  """
+  def __init__(self, in_ch, out_ch):
+    super().__init__()
+    self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+    self.conv = nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, padding_mode='reflect')
+
+  def forward(self, x):
+    x = self.upsample(x)
+    x = self.conv(x)
+    return x
 
 class conv_block(nn.Module):
     def __init__(self, in_c, out_c):
         super().__init__()
 
-        self.conv1 = nn.Conv2d(in_c, out_c, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(out_c)
+        self.conv1 = nn.Conv2d(in_c, out_c, kernel_size=3, padding=1, padding_mode='reflect')
+        # self.bn1 = nn.BatchNorm2d(out_c)
+        self.bn1 = nn.InstanceNorm2d(out_c, affine=True)
 
-        self.conv2 = nn.Conv2d(out_c, out_c, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(out_c)
+        self.conv2 = nn.Conv2d(out_c, out_c, kernel_size=3, padding=1, padding_mode='reflect')
+        # self.bn2 = nn.BatchNorm2d(out_c)
+        self.bn2 = nn.InstanceNorm2d(out_c, affine=True)
 
         self.relu = nn.ReLU()
 
@@ -42,11 +60,16 @@ class decoder_block(nn.Module):
     def __init__(self, in_c, out_c):
         super().__init__()
 
-        self.up = nn.ConvTranspose2d(in_c, out_c, kernel_size=2, stride=2, padding=0)
+        # self.up = nn.ConvTranspose2d(in_c, out_c, kernel_size=2, stride=2, padding=0)
+        self.up = nn.Sequential(
+          nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+          nn.Conv2d(in_c, out_c, kernel_size=3, padding=1, padding_mode='reflect'),
+        )
         self.conv = conv_block(out_c+out_c, out_c)
 
     def forward(self, inputs, skip):
         x = self.up(inputs)
+        # print(f'decoder block. x shape: {x.shape}, skip shape: {skip.shape}')
         x = torch.cat([x, skip], axis=1)
         x = self.conv(x)
         return x
@@ -163,10 +186,61 @@ class build_unet_small(nn.Module):
 
         return outputs
 
+class build_unet_smaller(nn.Module):
+    def __init__(self, width):
+        super().__init__()
+
+        """ padding in horizontal direction """
+        upperB_exp = int( np.ceil( np.log2(width) ) )
+        upperB = np.power(2, upperB_exp)
+        hpad = (upperB - width)/2 + 1
+        hker = 2*hpad - 1
+        self.enlarge = nn.Conv2d(1,1,stride=1,kernel_size=3,padding=(1,int(hpad)))
+        self.decimate = nn.Conv2d(1,1,stride=1,kernel_size=(3, int(hker)),padding=(1,0))
+
+        """ Encoder """
+        self.e1 = encoder_block(1, 32)
+        self.e2 = encoder_block(32, 64)
+
+        """ Bottleneck """
+        self.b = conv_block(64, 128)
+
+        """ Decoder """
+        self.d3 = decoder_block(128, 64)
+        self.d4 = decoder_block(64, 32)
+
+        """ Classifier """
+        self.outputs = nn.Conv2d(32, 1, kernel_size=1, padding=0)
+
+    def forward(self, inputs):
+
+        """ pad to 512 """
+        s0 = self.enlarge(inputs)
+        
+        """ Encoder """
+        s1, p1 = self.e1(s0)
+        s2, p2 = self.e2(p1)
+
+        """ Bottleneck """
+        b = self.b(p2)
+
+        """ Decoder """
+        d3 = self.d3(b, s2)
+        d4 = self.d4(d3, s1)
+
+        outputs = self.outputs(d4)
+        outputs = self.decimate(outputs)
+        
+
+        return outputs
+
 if __name__ == "__main__":
     # f = build_unet(256)
     # summary(f, (1, 256, 256))
     f2 = build_unet_small(256)
     summary(f2, (1, 1, 256, 256))
-    a = torch.rand((1, 1, 256, 256))
-    print(f2(a).shape)
+    # a = torch.rand((1, 1, 256, 256))
+    # print(f2(a).shape)
+
+    f3 = build_unet_smaller(84)
+    summary(f3, (1,1,380, 84))

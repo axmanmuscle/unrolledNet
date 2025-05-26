@@ -150,3 +150,12 @@ implement just a grad desc block and then just put the nn operator in the main c
 
 ## 05/12/2025
 The one u-net unrolled network looks like its set up properly, probably worth trying to train or something
+
+## 05/12/25 (2)
+Changed the supervised training, added the no_grad, added a DC option. put that on the supercomputer to test
+
+## 05/15/2025
+Started writing the fetal data stuff, requires its own training loop since we don't make the undersampling mask
+
+## 05/15/2025
+have the fetal stuff running on the zero shot unrolled net which shares a network. created a smaller unet. I'm changing the padding boundary conditions for the convolutional layers to see if that helps this weird brightening at the edges i'm seeing.
