@@ -216,6 +216,7 @@ def main():
     # device = torch.device('cpu')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    logging.info(f"data consistency chosen: {args.dc}")
     logging.info(f"device chosen: {device}")
 
     # Define image size
