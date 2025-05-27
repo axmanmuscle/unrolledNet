@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument('--data_dir', type=str, required=True, help="Path to dataset root (should contain kspace and sens_maps)")
     parser.add_argument('--save_dir', type=str, default='./results', help="Directory to save checkpoints and logs")
     parser.add_argument('--epochs', type=int, default=100, help="Number of training epochs")
-    parser.add_argument('--dc', type=bool, default=True, help="Enforce Data Consistency or not")
+    parser.add_argument('--dc', action='store_true', help="Enforce Data Consistency or not")
     args = parser.parse_args()
     return args
 
