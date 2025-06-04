@@ -92,7 +92,7 @@ class final_block_nodc(nn.Module):
         forward method for the final block
         just return the wavelet coefficients to image space
         """
-        x, mask, b = inputs
+        x, mask, b, sMaps = inputs
 
         # wavelet coefficients to image space
         x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
@@ -261,11 +261,12 @@ class unrolled_block(nn.Module):
         with torch.no_grad():
             out = self.grad_desc(x, applyA, b)
 
+            out = self.applyW(out, 'transp')
             if self.dc:
                 out = self.prox(out, mask, b, sMaps)
 
             # wavelets to image space
-            out = self.applyW(out, 'transp')
+            # out = self.applyW(out, 'transp')
 
         out = torch.view_as_real(out)
         n = out.shape[-3]

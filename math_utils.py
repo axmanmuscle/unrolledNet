@@ -806,8 +806,25 @@ def iwtDaubechies2_np(wt, split = np.array([1])):
 
     return img
 
+def runWavProfile():
+    x = torch.randn(256, 256)
+    split = makeWavSplit(x.shape)
+    split = torch.tensor(split)
 
-if __name__ == "__main__":
+    for _ in range(10):
+        out = wtDaubechies2(x, split)
+
+
+def profile_wavelets():
+    import cProfile
+    import pstats
+
+    cProfile.run("runWavProfile()", "profile.out")
+    p = pstats.Stats("profile.out")
+    p.sort_stats("cumulative").print_stats(20)
+    return 0
+
+def test_wavelets():
     rng = np.random.default_rng(2025)
     for _ in range(20):
         x0 = rng.normal(size=(25, 25))
@@ -823,3 +840,7 @@ if __name__ == "__main__":
     torch_wwt = iwtDaubechies2(torch_ww)
     print(torch.norm(torch_wwt - torch.tensor(wwt)))
     print(torch.norm(torch_ww - torch.tensor(ww)))
+
+if __name__ == "__main__":
+    profile_wavelets()
+    # test_wavelets()
