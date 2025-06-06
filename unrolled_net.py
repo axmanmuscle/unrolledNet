@@ -23,7 +23,7 @@ Seems strange but the grad descent will impact all of the image x and the constr
 import torch
 import torch.nn as nn
 import numpy as np
-from unet import build_unet ,build_unet_small
+from unet import build_unet ,build_unet_small, build_unet_smaller
 from torchinfo import summary
 import gc
 import utils
@@ -107,7 +107,7 @@ class unrolled_block(nn.Module):
     def __init__(self, shape, wavSplit, device, dc=True):
         super(unrolled_block, self).__init__()
         self.device = device
-        self.nn = build_unet(shape[1])
+        self.nn = build_unet_smaller(shape[1])
         self.wavSplit = wavSplit
         self.dc = dc
 
@@ -330,6 +330,6 @@ if __name__ == "__main__":
     kSpace = torch.randn([1,1,640,320,16]) + 1j*torch.randn([1,1,640,320,16])
     mask = torch.randn([1,1,640,320])
     mask = mask > 0
-    model = unrolled_net([640, 320], device, n=2 )
+    model = unrolled_net([640, 320], device, n=5 )
 
     print(summary(model, [kSpace.shape[0:4], mask.shape[2:4], kSpace.shape, sMaps.shape], dtypes=[torch.complex64, torch.bool, torch.complex64, torch.complex64], device="cpu"))
