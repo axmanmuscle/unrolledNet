@@ -230,14 +230,14 @@ def main():
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
     dataconsistency = args.dc
     multicoil = True
-    model = unrolled_net(sImg, device, 5, dataconsistency, multicoil)
+    model = unrolled_net(sImg, device, 10, dataconsistency, multicoil)
     model = model.to(device)
 
     # Define optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Adjusted learning rate
 
     # Create undersampling mask
-    mask = utils.vdSampleMask(sImg, [50, 30], 0.05 * np.prod(sImg), maskType='laplace')
+    mask = utils.vdSampleMask(sImg, [50, 30], 0.15 * np.prod(sImg), maskType='laplace')
     mask = mask > 0
     mask = torch.tensor(mask)
     mask = mask.to(device)

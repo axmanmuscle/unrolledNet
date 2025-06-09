@@ -159,3 +159,8 @@ Started writing the fetal data stuff, requires its own training loop since we do
 
 ## 05/15/2025
 have the fetal stuff running on the zero shot unrolled net which shares a network. created a smaller unet. I'm changing the padding boundary conditions for the convolutional layers to see if that helps this weird brightening at the edges i'm seeing.
+
+## 06/06/2025
+Some stuff that needs to get done:
+ - option for supervised learning with and without wavelets
+ - option for supervised learning sharing a network and each block having its own 
