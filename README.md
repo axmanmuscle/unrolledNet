@@ -164,3 +164,10 @@ have the fetal stuff running on the zero shot unrolled net which shares a networ
 Some stuff that needs to get done:
  - option for supervised learning with and without wavelets
  - option for supervised learning sharing a network and each block having its own 
+
+## 06/11/2025
+Start debugging stuff but just starting with a supervised unet reconstructing from undersampled k-space (or the zero filled image i guess)
+
+need to write the evaluation script for this and then for the wavelet coefficients one
+probably need to run on the supercomputer
+maybe try a smaller unet?
