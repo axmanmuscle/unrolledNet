@@ -347,8 +347,7 @@ class supervised_net(nn.Module):
 
           assert not error
               
-          with torch.no_grad():
-            out = self.apply_dc(out, mask, b, sMaps)
+          out = self.apply_dc(out, mask, b, sMaps)
 
       return out
     
