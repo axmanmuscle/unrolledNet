@@ -171,3 +171,10 @@ Start debugging stuff but just starting with a supervised unet reconstructing fr
 need to write the evaluation script for this and then for the wavelet coefficients one
 probably need to run on the supercomputer
 maybe try a smaller unet?
+
+Wrote two things:
+ - a new class that I can just add stuff to instead of just using the old unet class. this will make building easier
+ - an evaluation script for the new class
+
+
+It would be nice to be able to run with a batch size larger than 1 - give that a whirl at some point
