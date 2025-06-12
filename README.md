@@ -178,3 +178,27 @@ Wrote two things:
 
 
 It would be nice to be able to run with a batch size larger than 1 - give that a whirl at some point
+
+## 06/11/2025 - 2
+Okay, I'm going to change the network so the input is a 2 channel real array so i'm not taking the absolute value before hand. The input is the Roemer recon of the undersampled data stacked up as [Nbatch, 2, Nx, Ny] probably
+
+Fixed LOTS of issues in the supervised model. Some of this will need to get put over in the unrolled net, or else we just build this one into the unrolled net one good idea at a time.
+
+Some stuff we fixed:
+ - making applying data consistency nicer. it now looks like
+ ```python
+    x_exp = x.unsqueeze(-1) # [B, H, W, 1]
+    coil_ims = x_exp * sMaps # [B, H, W, C]
+
+    kSpace = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( coil_ims, dim=(-3,-2) ), norm='ortho',\
+                                              dim = (-3,-2)  ), dim=(-3,-2)  )
+
+    kSpace[..., mask, :] = b[..., mask, :]
+ ```
+
+ notice that we don't construct `out` directly and fill it in, it's a multiplication of x_exp and sMas like we wanted.
+
+ - fixed an (apparent) issue with the Fourier transforms
+ compare the `dim` in the ffts and shifts with the dimensions noted by the variables - they weren't lined up before
+ - batching is now fixed
+ we are no longer doing all sorts of squeeze/unsqueeze stuff, the batching is fixed. this should allow the supercomputer to run much faster i think

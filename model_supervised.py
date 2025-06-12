@@ -296,29 +296,19 @@ class supervised_net(nn.Module):
         replace data at mask with b
         roemer recon
         """
+        # sMaps: [B, H, W, C], x: [B, H, W]
+        x_exp = x.unsqueeze(-1) # [B, H, W, 1]
+        coil_ims = x_exp * sMaps # [B, H, W, C]
 
-        nCoils = sMaps.shape[-1]
-        # out = torch.zeros(size=[self.nBatch, *self.sMaps.shape], dtype=self.sMaps.dtype)
-        out = torch.zeros(size = [*x.shape, nCoils], dtype=sMaps.dtype, device=self.device)
-        if len(x.shape) == 4:
-            sm = sMaps.unsqueeze(0)
-        else:
-            sm = sMaps
-        for i in range(nCoils):
-            out[...,i] = sm[...,i] * x
+        kSpace = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( coil_ims, dim=(-3,-2) ), norm='ortho',\
+                                                 dim = (-3,-2)  ), dim=(-3,-2)  )
 
-        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
-                                                 dim = (2,3) ), dim=(2,3) )
-
-        if len(mask.shape) < 3:
-          out[..., mask, :] = b[..., mask, :]
-        else:
-          out[mask] = b[mask]
+        kSpace[..., mask, :] = b[..., mask, :]
         
-        out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho',\
-                                                 dim = (2,3) ), dim=(2,3) )
+        coil_ims_dc = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( kSpace, dim=(-3,-2) ), norm='ortho',\
+                                                 dim =(-3,-2) ), dim=(-3,-2) )
 
-        out = torch.sum( torch.conj(sm) * out, -1 ) #roemer
+        out = torch.sum( torch.conj(sMaps) * coil_ims_dc, -1 ) #roemer
 
         return out
 
@@ -331,7 +321,11 @@ class supervised_net(nn.Module):
       sMaps - [1 x nCoils x Nx x Ny] complex float estimated sensitivity maps
       """
 
+      x = utils.complex_to_channels(x)
+
       out = self.unet(x)
+
+      out = utils.channels_to_complex(out)
 
       if self.dc:
           error = False

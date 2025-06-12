@@ -7,6 +7,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import laplace, norm
 
+def complex_to_channels(x: torch.Tensor) -> torch.Tensor:
+    """Convert complex tensor [B, H, W] to [B, 2, H, W]"""
+    return torch.stack([x.real, x.imag], dim=1)
+
+def channels_to_complex(x: torch.Tensor) -> torch.Tensor:
+    """Convert real tensor [B, 2, H, W] to complex [B, H, W]"""
+    return torch.complex(x[:, 0], x[:, 1])
+
 def save_im_cube(data, fname, title=''):
     """
     the expectation here is that we're plotting data of size [Nx x Ny x C]
