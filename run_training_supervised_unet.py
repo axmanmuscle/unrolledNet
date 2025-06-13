@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument('--save_dir', type=str, default='./results', help="Directory to save checkpoints and logs")
     parser.add_argument('--epochs', type=int, default=100, help="Number of training epochs")
     parser.add_argument('--dc', action='store_true', help="Enforce Data Consistency or not")
+    parser.add_argument('--grad', action='store_true', help="Do grad descent step/s or not")
     args = parser.parse_args()
     return args
 
@@ -216,6 +217,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     logging.info(f"data consistency chosen: {args.dc}")
+    logging.info(f"grad chosen: {args.grad}")
     logging.info(f"device chosen: {device}")
 
     # Define image size
@@ -231,7 +233,7 @@ def main():
     multicoil = True
     # model = build_unet(sImg[-1])
     # model = build_unet_small(sImg[-1])
-    model = supervised_net(sImg, device, dc=dataconsistency)
+    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad)
     model = model.to(device)
 
     # Define optimizer

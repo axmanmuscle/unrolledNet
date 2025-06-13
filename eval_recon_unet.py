@@ -38,6 +38,7 @@ def parse_args():
     parser.add_argument('--checkpoint', type=str, required=True)
     parser.add_argument('--save_dir', type=str, default='./eval_results')
     parser.add_argument('--dc', action='store_true', help="Enforce Data Consistency or not")
+    parser.add_argument('--grad', action='store_true', help="Grad descent steps or not")
     return parser.parse_args()
 
 def main():
@@ -45,13 +46,13 @@ def main():
     os.makedirs(args.save_dir, exist_ok=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    dataset = MRIDataset(kspace_dir=args.data_dir, sens_dir=os.path.join(args.data_dir, './sens_maps'))
+    dataset = MRIDataset(kspace_dir=args.data_dir, sens_dir=os.path.join(args.data_dir, '../subset_sensmaps/sens_maps'))
     loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     sImg = dataset[0][0].shape[-2:]
     print(sImg)
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
-    model = supervised_net(sImg, device, args.dc)
+    model = supervised_net(sImg, device, args.dc, args.grad)
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     model.eval()
     model.to(device)

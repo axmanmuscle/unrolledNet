@@ -262,13 +262,42 @@ class grad_desc(nn.Module):
     
     def forward(self, x, sMaps, mask, b):
 
-        Ax = self.applyA(x, sMaps, mask) # [B, H, W, C]
-        resid = Ax - b # [B, H, W, C]
-        gradf = self.applyA(resid, sMaps, mask, 'transp') # [B, H, W]
+        A = lambda x_in: self.applyA(x_in, sMaps, mask)
+        At = lambda x_in: self.applyA(x_in, sMaps, mask, op='transp')
 
-        x_new = x - self.alpha * gradf
+        def obj(xi):
+           return 0.5 * torch.norm(A(xi) - b)**2
+        
+        def grad(xi):
+            xt = A(xi) - b
+            xt = At(xt)
+            return xt
 
-        return x_new
+        # Ax = self.applyA(x, sMaps, mask) # [B, H, W, C]
+        # resid = Ax - b # [B, H, W, C]
+        # gradf = self.applyA(resid, sMaps, mask, 'transp') # [B, H, W]
+
+        # x_new = x - self.alpha * gradf
+
+        gx = grad(x)
+        gxNorm = torch.norm(gx.reshape(-1, 1))**2
+        alpha = 1e-1 # TODO this may need to get changed
+        rho = 0.9
+        c = 0.9
+        max_linesearch_iters = 250
+        obj_x = obj(x)
+
+        linesearch_iter = 0
+        while linesearch_iter < max_linesearch_iters:
+            linesearch_iter += 1
+            xNew = x - alpha*gx
+            obj_xnew = obj(xNew)
+            if obj_xnew < obj_x - alpha * c * gxNorm:
+                break
+            alpha *= rho
+
+        # print(f'grad_descent line search finished after {linesearch_iter} iters at alpha {alpha}')
+        return xNew
 
 class supervised_net(nn.Module):
     def __init__(self, sImg, device, dc=True, grad=False, alpha=1e-3):
