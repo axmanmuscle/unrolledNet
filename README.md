@@ -202,3 +202,4 @@ Some stuff we fixed:
  compare the `dim` in the ffts and shifts with the dimensions noted by the variables - they weren't lined up before
  - batching is now fixed
  we are no longer doing all sorts of squeeze/unsqueeze stuff, the batching is fixed. this should allow the supercomputer to run much faster i think
+ - ALSO another big one is stacking the real/imag as *channels* not just appending them

@@ -199,7 +199,7 @@ def main():
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
     # Create DataLoader
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=0, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=0, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True, drop_last=True)
     
     # dataloader = DataLoader(
@@ -275,12 +275,9 @@ def main():
             ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
             zf = torch.sqrt((ks.real ** 2 + ks.imag ** 2).sum(dim=1, keepdim=True))  # SoS
 
-            ## for now let's not do roemer, just SoS of the zero-filled
+            ## roemer input
             ks1 = ks * torch.conj(sens_maps)
-            # ks1 = ks * torch.conj(ks) # SoS
             x_init = torch.sum(ks1, dim = 1) # dim = 1 is coil dimension
-
-            # x_init = zf
 
             sens_maps = torch.permute(sens_maps, dims=(0,2,3,1))
             kspace_undersampled = torch.permute(kspace_undersampled, (0,2,3,1))
@@ -328,7 +325,7 @@ def main():
         logging.info(f"Validation Loss: {val_loss:.6f}")
 
         # Optionally save model checkpoint
-        if (epoch + 1) % 20 == 0:
+        if (epoch + 1) % 100 == 0:
             if dataconsistency:
                 tstr = f"dc_checkpoint_epoch_{epoch+1}.pth"
             else:

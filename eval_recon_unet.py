@@ -75,14 +75,26 @@ def main():
                 kspace_undersampled[~mask] = 0
 
 
-            ks = torch.fft.ifftshift(torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim=[2, 3]), dim=[2, 3])
+            # Initialize input for the model (e.g., zero-filled reconstruction)
+            ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
             zf = torch.sqrt((ks.real ** 2 + ks.imag ** 2).sum(dim=1, keepdim=True))  # SoS
+
+            ## roemer input
+            ks1 = ks * torch.conj(sens_maps)
+            x_init = torch.sum(ks1, dim = 1) # dim = 1 is coil dimension
+
+            sens_maps = torch.permute(sens_maps, dims=(0,2,3,1))
+            kspace_undersampled = torch.permute(kspace_undersampled, (0,2,3,1))
+
+            # Forward pass
+            output = model(x_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
 
             # Ground truth image
             gt = torch.fft.ifftshift(torch.fft.ifftn(torch.fft.fftshift(kspace, dim=[2, 3]), dim=[2, 3]), dim=[2, 3])
+            gt = torch.permute(gt, dims=(0, 2, 3, 1))
             gt = gt * torch.conj(sens_maps)
-            gt = torch.sum(gt, dim=1, keepdim=True)
-            gt = gt / gt.abs().amax(dim=(-2, -1), keepdim=True)
+            gt = torch.sum(gt, dim=-1, keepdim=True)
+            gt = gt / gt.abs().amax(dim=(-3, -2), keepdim=True)
             gt = torch.abs(gt)
 
             # Input to network
@@ -94,7 +106,6 @@ def main():
             kspace_undersampled = kspace_undersampled.permute(0, 2, 3, 1).unsqueeze(1)
 
             # Network output
-            output = model(zf.abs(), mask, kspace_undersampled, sens_maps_permuted)
             output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
             output = torch.abs(output)
 

@@ -11,75 +11,6 @@ import gc
 import utils
 import math_utils
 
-class prox_block(nn.Module):
-    """
-    just a module for the proximal block
-    """
-
-    def __init__(self, device, wavSplit):
-        super(prox_block, self).__init__()
-        self.device = device
-        self.wavSplit = wavSplit
-
-    def forward(self, inputs):
-        """
-        forward method for prox block
-        simply to do a proximal step at the very end for data consistency
-        """
-        x, mask, b, sMaps = inputs
-
-        nCoils = sMaps.shape[-1]
-        # wavelet coefficients to image space
-        x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
-
-        x = x[None, None, :, :]
-
-        out = torch.zeros(size = [*x.shape, nCoils], dtype=sMaps.dtype, device = self.device)
-
-        if len(x.shape) == 4:
-            sm = sMaps.unsqueeze(0)
-        else:
-            sm = sMaps
-
-        for i in range(nCoils):
-            out[...,i] = sm[...,i] * x
-
-        out = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
-
-        if len(mask.shape) < 3:
-          out[..., mask, :] = b[..., mask, :]
-        else:
-          out[mask] = b[mask]
-
-        out = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( out, dim=(2,3) ), norm='ortho', dim=(2,3) ), dim=(2,3) )
-        out = torch.sum( torch.conj(sm) * out, -1 ) #roemer
-
-        #out = torch.view_as_real(out)
-
-        return out
-
-class final_block_nodc(nn.Module):
-    """
-    final block for the wavelet network
-    """
-
-    def __init__(self, device, wavSplit):
-        super(final_block_nodc, self).__init__()
-        self.device = device
-        self.wavSplit = wavSplit
-
-    def forward(self, inputs):
-        """
-        forward method for the final block
-        just return the wavelet coefficients to image space
-        """
-        x, mask, b, sMaps = inputs
-
-        # wavelet coefficients to image space
-        x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
-
-        return x
-
 class unrolled_block(nn.Module):
     """
     we probably need A matrix free huh
@@ -278,14 +209,78 @@ class unrolled_block(nn.Module):
 
         return out, mask, b, sMaps
 
+class grad_desc(nn.Module):
+    """
+    apply gradient descent to 
+    0.5 * || Ax - b ||_2^2
+    so gradf(x) = A^*(Ax - b)
+    A = MFS
+    """
+    def __init__(self, alpha):
+        super(grad_desc, self).__init__()
+        self.alpha = alpha
+
+    def applyM(self, x, mask, op='notransp'):
+        # x: [B, H, W, C] complex
+        if mask.ndim == 2:
+            mask = mask[None, ...]              # → [1, H, W]
+        mask = mask[..., None]                  # → [B, H, W, 1]
+        return x * mask
+    
+    def applyF(self, x, op='notransp'):
+        # forward mode - x is [B, H, W, C] and we want the fourier transorm
+        # backward mode - x is [B, H, W, C] and we want the inverse fourier transform
+        if op == 'transp':
+            return torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( x, dim=(-3,-2) ), norm='ortho',\
+                                                 dim = (-3,-2)  ), dim=(-3,-2)  )
+        else:
+            return torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( x, dim=(-3,-2) ), norm='ortho',\
+                                                 dim = (-3,-2)  ), dim=(-3,-2)  )\
+            
+    def applyS(self, x, sMaps, op='notransp'):
+        if op == 'transp':
+            # roemer recon
+            return torch.sum(torch.conj(sMaps) * x, -1) # -1 is coil dim
+        else:
+            # apply coil sensitivities
+            # x is [B, H, W]
+            # smaps are [B, H, W, C]
+            return x.unsqueeze(-1) * sMaps # [B, H, W, C]
+
+    def applyA(self, x, sMaps, mask, op='notransp'):
+        if op == 'transp':
+            out = self.applyM(x, mask, op)
+            out = self.applyF(out, op)
+            out = self.applyS(out, sMaps, op)
+
+        else:
+            out = self.applyS(x, sMaps)
+            out = self.applyF(out)
+            out = self.applyM(out, mask)
+
+        return out
+    
+    def forward(self, x, sMaps, mask, b):
+
+        Ax = self.applyA(x, sMaps, mask) # [B, H, W, C]
+        resid = Ax - b # [B, H, W, C]
+        gradf = self.applyA(resid, sMaps, mask, 'transp') # [B, H, W]
+
+        x_new = x - self.alpha * gradf
+
+        return x_new
+
 class supervised_net(nn.Module):
-    def __init__(self, sImg, device, dc=True):
+    def __init__(self, sImg, device, dc=True, grad=False, alpha=1e-3):
         super(supervised_net, self).__init__()
         self.device = device
         self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
         self.dc = dc
+        self.alpha = alpha
 
         self.unet = build_unet_smaller(sImg[-1])
+        self.grad = grad
+        self.grad_step = grad_desc(self.alpha)
 
     def apply_dc(self, x, mask, b, sMaps):
         """
@@ -303,7 +298,11 @@ class supervised_net(nn.Module):
         kSpace = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( coil_ims, dim=(-3,-2) ), norm='ortho',\
                                                  dim = (-3,-2)  ), dim=(-3,-2)  )
 
-        kSpace[..., mask, :] = b[..., mask, :]
+        # Safe masking
+        if mask.ndim == 2:
+            mask = mask[None, ...]  # [1, H, W]
+        mask = mask[..., None]     # [B, H, W, 1]
+        kSpace = kSpace * (~mask) + b * mask
         
         coil_ims_dc = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( kSpace, dim=(-3,-2) ), norm='ortho',\
                                                  dim =(-3,-2) ), dim=(-3,-2) )
@@ -315,35 +314,30 @@ class supervised_net(nn.Module):
     def forward(self, x, mask = None, b = None, sMaps = None):
       """
       here we assume the inputs are:
-      x - [batchsize x 1 x Nx x Ny] REAL image
+      x - [batchsize x 1 x Nx x Ny] complex image
       mask - [1 x 1 x Nx x Ny] masks of 0s and 1s
       b - [1 x nCoils x Nx x Ny] complex float measured kspace data
       sMaps - [1 x nCoils x Nx x Ny] complex float estimated sensitivity maps
+      
+      we split x into real and imag channels before applying unet
       """
+      assert x.ndim == 3, "x at input must be [B, H, W] (complex)"
+      assert b is not None and sMaps is not None and mask is not None
 
+      # step 1: gradient descent
+      if self.grad:
+        x = self.grad_step(x, sMaps, mask, b)
+
+      # step 2: convert to channels and apply unet
       x = utils.complex_to_channels(x)
+      x_out = self.unet(x)
+      x_out = utils.channels_to_complex(x_out)
 
-      out = self.unet(x)
+      # step 3: (optionally) apply data consistency
+      if self.dc:              
+          x_out = self.apply_dc(x_out, mask, b, sMaps)
 
-      out = utils.channels_to_complex(out)
-
-      if self.dc:
-          error = False
-          if mask is None:
-              print('data consistency is true but no mask given to forward method') 
-              error = True
-          if b is None:
-              print('data consistency is true but no rhs given to forward method')
-              error = True
-          if sMaps is None:
-              print('data consistency is true but no sens maps given to forward method')
-              error = True
-
-          assert not error
-              
-          out = self.apply_dc(out, mask, b, sMaps)
-
-      return out
+      return x_out
     
 if __name__ == "__main__":
     device = torch.device("cpu")
