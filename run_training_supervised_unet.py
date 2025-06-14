@@ -200,7 +200,7 @@ def main():
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
     # Create DataLoader
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=0, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True, drop_last=True)
     
     # dataloader = DataLoader(

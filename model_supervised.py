@@ -220,6 +220,10 @@ class grad_desc(nn.Module):
         super(grad_desc, self).__init__()
         self.alpha = alpha
 
+    def applyW(self, x, op='notransp'):
+        # math_utils.wtDaubechies2(x_in, self.wavSplit)
+        return 0
+
     def applyM(self, x, mask, op='notransp'):
         # x: [B, H, W, C] complex
         if mask.ndim == 2:
@@ -300,7 +304,7 @@ class grad_desc(nn.Module):
         return xNew
 
 class supervised_net(nn.Module):
-    def __init__(self, sImg, device, dc=True, grad=False, alpha=1e-3):
+    def __init__(self, sImg, device, dc=True, grad=False, wavelets=False, alpha=1e-3):
         super(supervised_net, self).__init__()
         self.device = device
         self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
@@ -310,6 +314,11 @@ class supervised_net(nn.Module):
         self.unet = build_unet_smaller(sImg[-1])
         self.grad = grad
         self.grad_step = grad_desc(self.alpha)
+        self.wav = wavelets
+        if self.wav:
+            self.wavSplit = math_utils.makeWavSplit(sImg)
+            self.W = lambda x_in: math_utils.wtDaubechies2(x_in, self.wavSplit)
+            self.Wt = lambda x_in: math_utils.iwtDaubechies2(x_in, self.wavSplit)
 
     def apply_dc(self, x, mask, b, sMaps):
         """
@@ -352,6 +361,12 @@ class supervised_net(nn.Module):
       """
       assert x.ndim == 3, "x at input must be [B, H, W] (complex)"
       assert b is not None and sMaps is not None and mask is not None
+
+      if self.wav:
+          # convert to wavelet coefficients
+          wx = torch.squeeze(x)
+          wx = self.W(wx)
+          x = wx[None, :]
 
       # step 1: gradient descent
       if self.grad:
