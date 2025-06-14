@@ -219,6 +219,8 @@ def main():
     logging.info(f"data consistency chosen: {args.dc}")
     logging.info(f"grad chosen: {args.grad}")
     logging.info(f"device chosen: {device}")
+    logging.info(f"linesearch: false")
+    logging.info(f"grad step size: 0")
 
     # Define image size
     # sImg = [256, 256]
@@ -233,7 +235,7 @@ def main():
     multicoil = True
     # model = build_unet(sImg[-1])
     # model = build_unet_small(sImg[-1])
-    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linearch=False, alpha=0)
+    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=False, alpha=0)
     model = model.to(device)
 
     # Define optimizer
