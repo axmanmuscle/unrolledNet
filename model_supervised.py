@@ -216,9 +216,10 @@ class grad_desc(nn.Module):
     so gradf(x) = A^*(Ax - b)
     A = MFS
     """
-    def __init__(self, alpha):
+    def __init__(self, alpha, linesearch=True):
         super(grad_desc, self).__init__()
         self.alpha = alpha
+        self.ls = linesearch
 
     def applyW(self, x, op='notransp'):
         # math_utils.wtDaubechies2(x_in, self.wavSplit)
@@ -285,35 +286,41 @@ class grad_desc(nn.Module):
 
         gx = grad(x)
         gxNorm = torch.norm(gx.reshape(-1, 1))**2
-        alpha = 1e-1 # TODO this may need to get changed
-        rho = 0.9
-        c = 0.9
-        max_linesearch_iters = 250
-        obj_x = obj(x)
+        if self.ls:
+            alpha = 1e-1 # TODO this may need to get changed
+            rho = 0.9
+            c = 0.9
+            max_linesearch_iters = 250
+            obj_x = obj(x)
 
-        linesearch_iter = 0
-        while linesearch_iter < max_linesearch_iters:
-            linesearch_iter += 1
-            xNew = x - alpha*gx
-            obj_xnew = obj(xNew)
-            if obj_xnew < obj_x - alpha * c * gxNorm:
-                break
-            alpha *= rho
+            linesearch_iter = 0
+            while linesearch_iter < max_linesearch_iters:
+                linesearch_iter += 1
+                xNew = x - alpha*gx
+                obj_xnew = obj(xNew)
+                if obj_xnew < obj_x - alpha * c * gxNorm:
+                    break
+                alpha *= rho
 
-        # print(f'grad_descent line search finished after {linesearch_iter} iters at alpha {alpha}')
+            # print(f'grad_descent line search finished after {linesearch_iter} iters at alpha {alpha}')
+
+        else:
+            xNew = x - self.alpha*gx
+
         return xNew
 
 class supervised_net(nn.Module):
-    def __init__(self, sImg, device, dc=True, grad=False, wavelets=False, alpha=1e-3):
+    def __init__(self, sImg, device, dc=True, grad=False, linesearch = True, wavelets=False, alpha=1e-3):
         super(supervised_net, self).__init__()
         self.device = device
         self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
         self.dc = dc
         self.alpha = alpha
+        self.ls = linesearch
 
         self.unet = build_unet_smaller(sImg[-1])
         self.grad = grad
-        self.grad_step = grad_desc(self.alpha)
+        self.grad_step = grad_desc(self.alpha, self.ls)
         self.wav = wavelets
         if self.wav:
             self.wavSplit = math_utils.makeWavSplit(sImg)

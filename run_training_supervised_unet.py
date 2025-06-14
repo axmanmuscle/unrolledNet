@@ -233,7 +233,7 @@ def main():
     multicoil = True
     # model = build_unet(sImg[-1])
     # model = build_unet_small(sImg[-1])
-    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad)
+    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linearch=False, alpha=0)
     model = model.to(device)
 
     # Define optimizer
