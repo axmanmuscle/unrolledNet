@@ -52,7 +52,7 @@ def main():
     sImg = dataset[0][0].shape[-2:]
     print(sImg)
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
-    model = supervised_net(sImg, device, args.dc, args.grad)
+    model = supervised_net(sImg, device, args.dc, args.grad, linesearch=False, alpha=0)
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     model.eval()
     model.to(device)

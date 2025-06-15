@@ -377,7 +377,10 @@ class supervised_net(nn.Module):
 
       # step 1: gradient descent
       if self.grad:
-        x = self.grad_step(x, sMaps, mask, b)
+        with torch.no_grad():
+            xf = self.grad_step(x, sMaps, mask, b)
+            print(f'norm diff grad step: {torch.norm(x - xf)}')
+
 
       # step 2: convert to channels and apply unet
       x = utils.complex_to_channels(x)
