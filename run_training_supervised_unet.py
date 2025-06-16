@@ -329,7 +329,7 @@ def main():
         logging.info(f"Validation Loss: {val_loss:.6f}")
 
         # Optionally save model checkpoint
-        if (epoch + 1) % 100 == 0:
+        if (epoch + 1) % 5 == 0:
             if dataconsistency:
                 tstr = f"dc_checkpoint_epoch_{epoch+1}.pth"
             else:
