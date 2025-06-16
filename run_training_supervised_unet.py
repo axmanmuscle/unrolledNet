@@ -235,6 +235,7 @@ def main():
     multicoil = True
     # model = build_unet(sImg[-1])
     # model = build_unet_small(sImg[-1])
+    torch.manual_seed(20250615)
     model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=False, alpha=0)
     model = model.to(device)
 
