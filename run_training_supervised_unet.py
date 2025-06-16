@@ -27,6 +27,8 @@ def parse_args():
     parser.add_argument('--epochs', type=int, default=100, help="Number of training epochs")
     parser.add_argument('--dc', action='store_true', help="Enforce Data Consistency or not")
     parser.add_argument('--grad', action='store_true', help="Do grad descent step/s or not")
+    parser.add_argument('--ls', action='store_true', help="Do grad descent line search")
+    parser.add_argument('--alpha', type=float, default=1e-3, help="(optional) grad descent default step size")
     args = parser.parse_args()
     return args
 
@@ -219,8 +221,8 @@ def main():
     logging.info(f"data consistency chosen: {args.dc}")
     logging.info(f"grad chosen: {args.grad}")
     logging.info(f"device chosen: {device}")
-    logging.info(f"linesearch: false")
-    logging.info(f"grad step size: 0")
+    logging.info(f"linesearch: {args.ls}")
+    logging.info(f"grad step size: {args.alpha}")
 
     # Define image size
     # sImg = [256, 256]
@@ -232,7 +234,6 @@ def main():
     # Initialize model
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
     dataconsistency = args.dc
-    multicoil = True
     # model = build_unet(sImg[-1])
     # model = build_unet_small(sImg[-1])
     torch.manual_seed(20250615)
@@ -253,6 +254,9 @@ def main():
 
     # Training parameters
     num_epochs = args.epochs
+
+    # best val loss
+    best_val_loss = float('inf')
 
     # Training loop
     model.train()
@@ -329,8 +333,17 @@ def main():
         val_loss = evaluate(model, val_loader, device, mask, wavSplit, criterion)
         logging.info(f"Validation Loss: {val_loss:.6f}")
 
+        # save for best val loss
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+
+            tstr = f"best_epoch_{epoch+1}.pth"
+            checkpoint_path = os.path.join(args.save_dir, tstr)
+            torch.save(model.state_dict(), checkpoint_path)
+            logging.info(f"Saved checkpoint to {checkpoint_path}")
+
         # Optionally save model checkpoint
-        if (epoch + 1) % 5 == 0:
+        if (epoch + 1) % 100 == 0:
             if dataconsistency:
                 tstr = f"dc_checkpoint_epoch_{epoch+1}.pth"
             else:
