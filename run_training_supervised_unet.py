@@ -338,10 +338,10 @@ def main():
         if val_loss < best_val_loss:
             best_val_loss = val_loss
 
-            tstr = f"best_epoch_{epoch+1}.pth"
+            tstr = f"best_model.pth"
             checkpoint_path = os.path.join(args.save_dir, tstr)
             torch.save(model.state_dict(), checkpoint_path)
-            logging.info(f"Saved checkpoint to {checkpoint_path}")
+            logging.info(f"Saved best checkpoint at epoch {epoch} to {checkpoint_path}")
 
         # Optionally save model checkpoint
         if (epoch + 1) % 100 == 0:
