@@ -30,6 +30,7 @@ def parse_args():
     parser.add_argument('--ls', action='store_true', help="Do grad descent line search")
     parser.add_argument('--wav', action='store_true', help="wavelets")
     parser.add_argument('--alpha', type=float, default=1e-3, help="(optional) grad descent default step size")
+    parser.add_argument('--n', type=int, default=1, help = 'number of unrolled iters to do (default 1)')
     args = parser.parse_args()
     return args
 
@@ -206,15 +207,6 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True, drop_last=True)
     
-    # dataloader = DataLoader(
-    #     dataset,
-    #     batch_size=1,          # Adjust based on GPU memory
-    #     shuffle=False,          # Shuffle for training TODO CHange
-    #     num_workers=1,         # Parallel loading (adjust based on system)
-    #     pin_memory=True,       # Faster GPU transfer
-    #     drop_last=True         # Drop incomplete batch
-    # )
-
     # Set device
     # device = torch.device('cpu')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -235,10 +227,8 @@ def main():
     # Initialize model
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
     dataconsistency = args.dc
-    # model = build_unet(sImg[-1])
-    # model = build_unet_small(sImg[-1])
     torch.manual_seed(20250615)
-    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav)
+    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n)
     model = model.to(device)
 
     # Define optimizer

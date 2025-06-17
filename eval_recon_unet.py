@@ -40,6 +40,7 @@ def parse_args():
     parser.add_argument('--dc', action='store_true', help="Enforce Data Consistency or not")
     parser.add_argument('--grad', action='store_true', help="Grad descent steps or not")
     parser.add_argument('--ls', action='store_true', help="Do grad descent line search")
+    parser.add_argument('--wav', action='store_true', help="wavelets")
     parser.add_argument('--alpha', type=float, default=1e-3, help="(optional) grad descent default step size")
     return parser.parse_args()
 
@@ -54,7 +55,7 @@ def main():
     sImg = dataset[0][0].shape[-2:]
     print(sImg)
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
-    model = supervised_net(sImg, device, args.dc, args.grad, linesearch=args.ls, alpha=args.alpha)
+    model = supervised_net(sImg, device, args.dc, args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav)
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     model.eval()
     model.to(device)

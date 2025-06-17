@@ -321,12 +321,14 @@ class grad_desc(nn.Module):
         return xNew
 
 class supervised_net(nn.Module):
-    def __init__(self, sImg, device, dc=True, grad=False, linesearch = True, wavelets=False, alpha=1e-3):
+    def __init__(self, sImg, device, dc=True, grad=False, linesearch = True, wavelets=False, n=1, alpha=1e-3):
         super(supervised_net, self).__init__()
         self.device = device
         self.dc = dc
         self.alpha = alpha
         self.ls = linesearch
+
+        self.n = n
 
         self.unet = build_unet_smaller(sImg[-1])
         self.grad = grad
@@ -381,33 +383,38 @@ class supervised_net(nn.Module):
       assert x.ndim == 3, "x at input must be [B, H, W] (complex)"
       assert b is not None and sMaps is not None and mask is not None
 
-      if self.wav:
-          # convert to wavelet coefficients
-          wx = torch.squeeze(x)
-          wx = self.W(wx)
-          x = wx[None, :]
+      for iter in range(self.n):
+        if self.wav:
+            # convert to wavelet coefficients
+            wx = torch.squeeze(x)
+            wx = self.W(wx)
+            x = wx[None, :]
 
-      # step 1: gradient descent
-      if self.grad:
-        with torch.no_grad():
-            xf = self.grad_step(x, sMaps, mask, b)
-            # print(f'norm diff grad step: {torch.norm(x - xf)}')
-            x = xf
+        # step 1: gradient descent
+        if self.grad:
+            with torch.no_grad():
+                xf = self.grad_step(x, sMaps, mask, b)
+                # print(f'norm diff grad step: {torch.norm(x - xf)}')
+                x = xf
 
-      if self.wav:
-          wx = torch.squeeze(x)
-          wx = self.Wt(wx)
-          x = wx[None, :]
+        if self.wav:
+            wx = torch.squeeze(x)
+            wx = self.Wt(wx)
+            x = wx[None, :]
 
+        # step 2: (optionally) apply data consistency
+        if self.dc:              
+            x_out = self.apply_dc(x_out, mask, b, sMaps)
 
-      # step 2: convert to channels and apply unet
-      x = utils.complex_to_channels(x)
-      x_out = self.unet(x)
-      x_out = utils.channels_to_complex(x_out)
+        # step 3: convert to channels and apply unet
+        x = utils.complex_to_channels(x)
+        x_out = self.unet(x)
+        x_out = utils.channels_to_complex(x_out)
 
-      # step 3: (optionally) apply data consistency
+        
+      # finall do DC before output
       if self.dc:              
-          x_out = self.apply_dc(x_out, mask, b, sMaps)
+            x_out = self.apply_dc(x_out, mask, b, sMaps)
 
       return x_out
     
