@@ -324,7 +324,6 @@ class supervised_net(nn.Module):
     def __init__(self, sImg, device, dc=True, grad=False, linesearch = True, wavelets=False, alpha=1e-3):
         super(supervised_net, self).__init__()
         self.device = device
-        self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
         self.dc = dc
         self.alpha = alpha
         self.ls = linesearch
@@ -333,7 +332,7 @@ class supervised_net(nn.Module):
         self.grad = grad
         self.wav = wavelets
         if self.wav:
-            self.wavSplit = math_utils.makeWavSplit(sImg)
+            self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
             self.W = lambda x_in: math_utils.wtDaubechies2(x_in, self.wavSplit)
             self.Wt = lambda x_in: math_utils.iwtDaubechies2(x_in, self.wavSplit)
             self.grad_step = grad_desc(self.alpha, self.ls, w = self.W, wt = self.Wt)
@@ -392,7 +391,7 @@ class supervised_net(nn.Module):
       if self.grad:
         with torch.no_grad():
             xf = self.grad_step(x, sMaps, mask, b)
-            print(f'norm diff grad step: {torch.norm(x - xf)}')
+            # print(f'norm diff grad step: {torch.norm(x - xf)}')
             x = xf
 
       if self.wav:
