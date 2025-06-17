@@ -404,19 +404,19 @@ class supervised_net(nn.Module):
 
         # step 2: (optionally) apply data consistency
         if self.dc:              
-            x_out = self.apply_dc(x_out, mask, b, sMaps)
+            x = self.apply_dc(x, mask, b, sMaps)
 
         # step 3: convert to channels and apply unet
         x = utils.complex_to_channels(x)
-        x_out = self.unet(x)
-        x_out = utils.channels_to_complex(x_out)
+        x = self.unet(x)
+        x = utils.channels_to_complex(x)
 
         
       # finall do DC before output
       if self.dc:              
-            x_out = self.apply_dc(x_out, mask, b, sMaps)
+            x = self.apply_dc(x, mask, b, sMaps)
 
-      return x_out
+      return x
     
 if __name__ == "__main__":
     device = torch.device("cpu")
