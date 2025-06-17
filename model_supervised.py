@@ -216,14 +216,23 @@ class grad_desc(nn.Module):
     so gradf(x) = A^*(Ax - b)
     A = MFS
     """
-    def __init__(self, alpha, linesearch=True):
+    def __init__(self, alpha, linesearch=True, w = lambda x: x, wt = lambda x: x):
         super(grad_desc, self).__init__()
         self.alpha = alpha
         self.ls = linesearch
+        self.W = w
+        self.Wt = wt
 
     def applyW(self, x, op='notransp'):
-        # math_utils.wtDaubechies2(x_in, self.wavSplit)
-        return 0
+        wx = torch.squeeze(x)
+
+        if op == 'transp':
+            wx = self.Wt(wx)
+        else:
+            wx = self.W(wx)
+
+        x = wx[None, :]
+        return x
 
     def applyM(self, x, mask, op='notransp'):
         # x: [B, H, W, C] complex
@@ -257,9 +266,11 @@ class grad_desc(nn.Module):
             out = self.applyM(x, mask, op)
             out = self.applyF(out, op)
             out = self.applyS(out, sMaps, op)
+            out = self.applyW(out)
 
         else:
-            out = self.applyS(x, sMaps)
+            out = self.applyW(x, 'transp')
+            out = self.applyS(out, sMaps)
             out = self.applyF(out)
             out = self.applyM(out, mask)
 
@@ -320,12 +331,14 @@ class supervised_net(nn.Module):
 
         self.unet = build_unet_smaller(sImg[-1])
         self.grad = grad
-        self.grad_step = grad_desc(self.alpha, self.ls)
         self.wav = wavelets
         if self.wav:
             self.wavSplit = math_utils.makeWavSplit(sImg)
             self.W = lambda x_in: math_utils.wtDaubechies2(x_in, self.wavSplit)
             self.Wt = lambda x_in: math_utils.iwtDaubechies2(x_in, self.wavSplit)
+            self.grad_step = grad_desc(self.alpha, self.ls, w = self.W, wt = self.Wt)
+        elif self.grad and not self.wav:
+            self.grad_step = grad_desc(self.alpha, self.ls)
 
     def apply_dc(self, x, mask, b, sMaps):
         """
@@ -381,6 +394,11 @@ class supervised_net(nn.Module):
             xf = self.grad_step(x, sMaps, mask, b)
             print(f'norm diff grad step: {torch.norm(x - xf)}')
             x = xf
+
+      if self.wav:
+          wx = torch.squeeze(x)
+          wx = self.Wt(wx)
+          x = wx[None, :]
 
 
       # step 2: convert to channels and apply unet

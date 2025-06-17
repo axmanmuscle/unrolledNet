@@ -39,6 +39,8 @@ def parse_args():
     parser.add_argument('--save_dir', type=str, default='./eval_results')
     parser.add_argument('--dc', action='store_true', help="Enforce Data Consistency or not")
     parser.add_argument('--grad', action='store_true', help="Grad descent steps or not")
+    parser.add_argument('--ls', action='store_true', help="Do grad descent line search")
+    parser.add_argument('--alpha', type=float, default=1e-3, help="(optional) grad descent default step size")
     return parser.parse_args()
 
 def main():
@@ -52,7 +54,7 @@ def main():
     sImg = dataset[0][0].shape[-2:]
     print(sImg)
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
-    model = supervised_net(sImg, device, args.dc, args.grad, linesearch=False, alpha=0)
+    model = supervised_net(sImg, device, args.dc, args.grad, linesearch=args.ls, alpha=args.alpha)
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     model.eval()
     model.to(device)
@@ -102,9 +104,6 @@ def main():
             # ks1 = ks * torch.conj(sens_maps)
             ks1 = ks * torch.conj(ks) # SoS
             x_init = torch.sum(ks1, dim=1, keepdim=True)
-
-            sens_maps_permuted = sens_maps.permute(0, 2, 3, 1)
-            kspace_undersampled = kspace_undersampled.permute(0, 2, 3, 1).unsqueeze(1)
 
             # Network output
             output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
