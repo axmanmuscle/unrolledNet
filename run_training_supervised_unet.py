@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument('--grad', action='store_true', help="Do grad descent step/s or not")
     parser.add_argument('--ls', action='store_true', help="Do grad descent line search")
     parser.add_argument('--wav', action='store_true', help="wavelets")
+    parser.add_argument('--share', action='store_true', help="when TRUE, this option makes the unet at all layers of the unrolled network use the same weights")
     parser.add_argument('--alpha', type=float, default=1e-3, help="(optional) grad descent default step size")
     parser.add_argument('--n', type=int, default=1, help = 'number of unrolled iters to do (default 1)')
     args = parser.parse_args()
@@ -228,7 +229,7 @@ def main():
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
     dataconsistency = args.dc
     torch.manual_seed(20250615)
-    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n)
+    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n, share=args.share)
     model = model.to(device)
 
     # Define optimizer

@@ -43,6 +43,8 @@ def parse_args():
     parser.add_argument('--wav', action='store_true', help="wavelets")
     parser.add_argument('--alpha', type=float, default=1e-3, help="(optional) grad descent default step size")
     parser.add_argument('--n', type=int, default=1, help = 'number of unrolled iters to do (default 1)')
+    parser.add_argument('--share', action='store_true', help="when TRUE, this option makes the unet at all layers of the unrolled network use the same weights")
+
     return parser.parse_args()
 
 def main():
@@ -56,7 +58,7 @@ def main():
     sImg = dataset[0][0].shape[-2:]
     print(sImg)
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
-    model = supervised_net(sImg, device, args.dc, args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n=args.n)
+    model = supervised_net(sImg, device, args.dc, args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n=args.n, share=args.share)
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     model.eval()
     model.to(device)
