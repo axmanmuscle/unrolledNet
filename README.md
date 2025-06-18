@@ -203,3 +203,9 @@ Some stuff we fixed:
  - batching is now fixed
  we are no longer doing all sorts of squeeze/unsqueeze stuff, the batching is fixed. this should allow the supercomputer to run much faster i think
  - ALSO another big one is stacking the real/imag as *channels* not just appending them
+
+
+## To Do
+ - don't share networks amongst layers
+ - wavelet thresholding
+ - grad descent step size as a learnable param?

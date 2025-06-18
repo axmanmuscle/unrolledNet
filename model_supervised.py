@@ -321,7 +321,7 @@ class grad_desc(nn.Module):
         return xNew
 
 class supervised_net(nn.Module):
-    def __init__(self, sImg, device, dc=True, grad=False, linesearch = True, wavelets=False, n=1, alpha=1e-3):
+    def __init__(self, sImg, device, dc=True, grad=False, linesearch = True, wavelets=False, n=1, alpha=1e-3, share_weights=False):
         super(supervised_net, self).__init__()
         self.device = device
         self.dc = dc
@@ -329,8 +329,12 @@ class supervised_net(nn.Module):
         self.ls = linesearch
 
         self.n = n
+        self.share_weights = share_weights
+        if share_weights:
+            self.unet = build_unet_smaller(sImg[-1])
+        else:
+            self.unet_list = nn.ModuleList([build_unet_smaller(sImg[-1]) for _ in range(n)])
 
-        self.unet = build_unet_smaller(sImg[-1])
         self.grad = grad
         self.wav = wavelets
         if self.wav:
@@ -408,11 +412,16 @@ class supervised_net(nn.Module):
 
         # step 3: convert to channels and apply unet
         x = utils.complex_to_channels(x)
-        x = self.unet(x)
+        if self.share_weights:
+            nn = self.unet
+        else:
+            nn = self.unet_list[iter]
+        
+        x = nn(x)
         x = utils.channels_to_complex(x)
 
         
-      # finall do DC before output
+      # finally do DC before output
       if self.dc:              
             x = self.apply_dc(x, mask, b, sMaps)
 
@@ -421,9 +430,10 @@ class supervised_net(nn.Module):
 if __name__ == "__main__":
     device = torch.device("cpu")
     sMaps = torch.randn([1,640,320,16]) + 1j*torch.randn([1,640,320,16])
-    kSpace = torch.randn([1,1,640,320,16]) + 1j*torch.randn([1,1,640,320,16])
-    mask = torch.randn([1,1,640,320])
+    # kSpace = torch.randn([1,1,640,320,16]) + 1j*torch.randn([1,1,640,320,16])
+    im_in = torch.randn([1, 640, 320]) + 1j*torch.randn([1, 640, 320])
+    mask = torch.randn([640,320])
     mask = mask > 0
-    model = supervised_net([640, 320], device)
+    model = supervised_net([640, 320], device, dc=True, grad=True, linesearch = True, wavelets=False, n=10)
 
-    print(summary(model, [kSpace.shape[0:4], mask.shape[2:4], kSpace.shape, sMaps.shape], dtypes=[torch.float32, torch.bool, torch.complex64, torch.complex64], device="cpu"))
+    print(summary(model, [im_in.shape, mask.shape, sMaps.shape, sMaps.shape], dtypes=[torch.float32, torch.bool, torch.complex64, torch.complex64], device="cpu"))
