@@ -63,7 +63,7 @@ def main():
     model.eval()
     model.to(device)
 
-    mask = utils.vdSampleMask(sImg, [50, 30], 0.05 * np.prod(sImg), maskType='laplace')
+    mask = utils.vdSampleMask(sImg, [80, 55], 0.05 * np.prod(sImg), maskType='laplace')
     mask = (torch.tensor(mask) > 0).to(device)
 
     all_mse, all_psnr, all_ssim = [], [], []

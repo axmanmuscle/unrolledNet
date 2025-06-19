@@ -396,10 +396,10 @@ class supervised_net(nn.Module):
 
         # step 1: gradient descent
         if self.grad:
-            with torch.no_grad():
-                xf = self.grad_step(x, sMaps, mask, b)
-                # print(f'norm diff grad step: {torch.norm(x - xf)}')
-                x = xf
+            # with torch.no_grad():
+            xf = self.grad_step(x, sMaps, mask, b)
+            # print(f'norm diff grad step: {torch.norm(x - xf)}')
+            x = xf
 
         if self.wav:
             wx = torch.squeeze(x)

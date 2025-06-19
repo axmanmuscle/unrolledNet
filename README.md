@@ -209,3 +209,7 @@ Some stuff we fixed:
  - don't share networks amongst layers
  - wavelet thresholding
  - grad descent step size as a learnable param?
+
+
+## 6/19
+can't do torch.no_grad with multiple steps! also changed up the mask distribution
