@@ -218,7 +218,13 @@ def main():
     logging.info(f"grad chosen: {args.grad}")
     logging.info(f"device chosen: {device}")
     logging.info(f"linesearch: {args.ls}")
-    logging.info(f"grad step size: {args.alpha}")
+    if args.ls:
+        logging.info(f"grad step size: N/A (linesearch)")
+    else:
+        logging.info(f"grad step size: {args.alpha}")
+
+    logging.info(f"wavelets: {args.wav}")
+    logging.info(f"sharing weights: {args.share}")
 
     # Define image size
     # sImg = [256, 256]
