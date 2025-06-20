@@ -165,7 +165,9 @@ class MRIDataset(Dataset):
         kspace = kspace / np.max(np.abs(kspace)) # Shape: (num_coils, Nx, Ny)
 
         # Preprocess sensitivity map (normalize, split real/imag)
-        sens_map = sens_map / np.max(np.abs(sens_map)) # shape (num_coils, Nx, Ny)
+        # sens_map = sens_map / np.max(np.abs(sens_map)) # shape (num_coils, Nx, Ny)
+        norm_factor = np.sqrt(np.sum(np.abs(sens_map)**2, axis=0))  # [C, H, W]
+        sens_map = sens_map / (norm_factor + 1e-8)
 
         # Convert to PyTorch tensors
         kspace_tensor = torch.from_numpy(kspace)
@@ -231,6 +233,7 @@ def main():
     torch.manual_seed(20250615)
     model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n, share_weights=args.share)
     model = model.to(device)
+
 
     # Define optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Adjusted learning rate

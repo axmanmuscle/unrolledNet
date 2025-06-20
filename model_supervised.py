@@ -297,8 +297,9 @@ class grad_desc(nn.Module):
 
         gx = grad(x)
         gxNorm = torch.norm(gx.reshape(-1, 1))**2
+        # print(f'grad norm: {gxNorm}')
         if self.ls:
-            alpha = 1e-1 # TODO this may need to get changed
+            alpha = 0.5 # TODO this may need to get changed
             rho = 0.9
             c = 0.9
             max_linesearch_iters = 250
@@ -411,6 +412,7 @@ class supervised_net(nn.Module):
             x = self.apply_dc(x, mask, b, sMaps)
 
         # step 3: convert to channels and apply unet
+        in_norm = x.norm(dim=(-2,-1), keepdim=True)
         x = utils.complex_to_channels(x)
         if self.share_weights:
             nn = self.unet
@@ -419,6 +421,8 @@ class supervised_net(nn.Module):
         
         x = nn(x)
         x = utils.channels_to_complex(x)
+        out_norm = x.norm(dim=(-2,-1), keepdim=True)
+        x = x / (out_norm + 1e-8) * in_norm
 
         
       # finally do DC before output
