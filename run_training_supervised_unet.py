@@ -236,7 +236,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Adjusted learning rate
 
     # Create undersampling mask
-    mask = utils.vdSampleMask(sImg, [80, 55], 0.05 * np.prod(sImg), maskType='laplace')
+    mask = utils.vdSampleMask(sImg, [180, 95], 0.075 * np.prod(sImg), maskType='laplace')
     mask = mask > 0
     mask = torch.tensor(mask)
     mask = mask.to(device)
@@ -303,6 +303,13 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            ## sanity check
+            # for name, param in model.named_parameters():
+            #     if param.grad is not None:
+            #         print(name, param.grad.norm())
+            #     else:
+            #         print(name)
 
             # make sure we're well calibrated?
             # logging.info(f"min output: {torch.min(torch.abs(output))}")
