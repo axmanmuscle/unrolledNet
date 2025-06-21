@@ -245,7 +245,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Adjusted learning rate
 
     # Create undersampling mask
-    mask = utils.vdSampleMask(sImg, [180, 95], 0.075 * np.prod(sImg), maskType='laplace')
+    mask = utils.vdSampleMask(sImg, [180, 95], 0.05 * np.prod(sImg), maskType='laplace')
     mask = mask > 0
     mask = torch.tensor(mask)
     mask = mask.to(device)

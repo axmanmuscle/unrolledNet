@@ -213,3 +213,6 @@ Some stuff we fixed:
 
 ## 6/19
 can't do torch.no_grad with multiple steps! also changed up the mask distribution
+
+## 6/21
+things look good now. split brain into bigger set and testing subset both on supercomputer and here. ready to test!
