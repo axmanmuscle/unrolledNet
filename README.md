@@ -216,3 +216,9 @@ can't do torch.no_grad with multiple steps! also changed up the mask distributio
 
 ## 6/21
 things look good now. split brain into bigger set and testing subset both on supercomputer and here. ready to test!
+
+Nick wants:
+```
+I would say 3%, 5%, 7%, 10%, 15%, and 20%.
+```
+for ablation study

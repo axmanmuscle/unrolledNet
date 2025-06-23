@@ -683,22 +683,22 @@ def wtDaubechies2_np( img, split = np.array([1]) ):
         if s11.sum() > 0:
             if np.any(np.mod(wt11.shape, 2)):
                 raise ValueError('wt11 is invalid shape')
-            wt11 = wtDaubechies2(wt11, s11)
+            wt11 = wtDaubechies2_np(wt11, s11)
 
         if s12.sum() > 0:
             if np.any(np.mod(wt12.shape, 2)):
                 raise ValueError('wt12 is invalid shape')
-            wt12 = wtDaubechies2(wt12, s12)
+            wt12 = wtDaubechies2_np(wt12, s12)
 
         if s21.sum() > 0:
             if np.any(np.mod(wt21.shape, 2)):
                 raise ValueError('wt21 is invalid shape')
-            wt21 = wtDaubechies2(wt21, s21)
+            wt21 = wtDaubechies2_np(wt21, s21)
 
         if s22.sum() > 0:
             if np.any(np.mod(wt22.shape, 2)):
                 raise ValueError('wt22 is invalid shape')
-            wt22 = wtDaubechies2(wt22, s22)
+            wt22 = wtDaubechies2_np(wt22, s22)
 
 
     a1 = np.concatenate([wt11, wt12], axis=1)
