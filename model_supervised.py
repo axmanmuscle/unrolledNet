@@ -10,6 +10,7 @@ from torchinfo import summary
 import gc
 import utils
 import math_utils
+from wavelet_torch import WaveletTransform
 
 class unrolled_block(nn.Module):
     """
@@ -224,14 +225,14 @@ class grad_desc(nn.Module):
         self.Wt = wt
 
     def applyW(self, x, op='notransp'):
-        wx = torch.squeeze(x)
+        # wx = torch.squeeze(x)
 
         if op == 'transp':
-            wx = self.Wt(wx)
+            x = self.Wt(x)
         else:
-            wx = self.W(wx)
+            x = self.W(x)
 
-        x = wx[None, :]
+        # x = wx[None, :]
         return x
 
     def applyM(self, x, mask, op='notransp'):
@@ -340,8 +341,23 @@ class supervised_net(nn.Module):
         self.wav = wavelets
         if self.wav:
             self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
-            self.W = lambda x_in: math_utils.wtDaubechies2(x_in, self.wavSplit)
-            self.Wt = lambda x_in: math_utils.iwtDaubechies2(x_in, self.wavSplit)
+            # self.wavLevels = self.wavSplit.shape[-1]
+            self.wavLevels = 4
+            self.wavTrans = WaveletTransform(levels=self.wavLevels).to(self.device)
+            
+            def forwardW(x_in):
+                x_chan = utils.complex_to_channels(x_in)
+                x_out = self.wavTrans(x_chan)
+                return utils.channels_to_complex(x_out)
+            
+            def invW(x_in):
+                x_chan = utils.complex_to_channels(x_in)
+                x_out = self.wavTrans.inverse(x_chan)
+                return utils.channels_to_complex(x_out)
+            
+            self.W = forwardW
+            self.Wt = invW
+
             self.grad_step = grad_desc(self.alpha, self.ls, w = self.W, wt = self.Wt)
         elif self.grad and not self.wav:
             self.grad_step = grad_desc(self.alpha, self.ls)
@@ -391,9 +407,9 @@ class supervised_net(nn.Module):
       for iter in range(self.n):
         if self.wav:
             # convert to wavelet coefficients
-            wx = torch.squeeze(x)
-            wx = self.W(wx)
-            x = wx[None, :]
+            # wx = torch.squeeze(x)
+            x = self.W(x)
+            # x = wx[None, :]
 
         # step 1: gradient descent
         if self.grad:
@@ -403,9 +419,9 @@ class supervised_net(nn.Module):
             x = xf
 
         if self.wav:
-            wx = torch.squeeze(x)
-            wx = self.Wt(wx)
-            x = wx[None, :]
+            # wx = torch.squeeze(x)
+            x = self.Wt(x)
+            # x = wx[None, :]
 
         # step 2: (optionally) apply data consistency
         if self.dc:              
