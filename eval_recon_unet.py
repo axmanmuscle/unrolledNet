@@ -52,7 +52,7 @@ def main():
     os.makedirs(args.save_dir, exist_ok=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    dataset = MRIDataset(kspace_dir=args.data_dir, sens_dir=os.path.join(args.data_dir, '../subset_sensmaps/sens_maps'))
+    dataset = MRIDataset(kspace_dir=args.data_dir, sens_dir=os.path.join(args.data_dir, '../../subset_sensmaps/testing_sens_maps'))
     loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     sImg = dataset[0][0].shape[-2:]
