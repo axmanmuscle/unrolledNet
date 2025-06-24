@@ -90,7 +90,7 @@ class unrolled_block(nn.Module):
     """
     unrolled block for single shared network
     """
-    def __init__(self, sMaps, wavSplit, device, unet, dc=True, cornerOrigin=False):
+    def __init__(self, sMaps, wavSplit, device, dc=True, cornerOrigin=False):
         super(unrolled_block, self).__init__()
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
