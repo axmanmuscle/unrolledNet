@@ -1,5 +1,7 @@
 """
 supervised training for the unrolled network
+
+here we're just starting with the UNet to reconstruct images, no unrolled net
 """
 
 import numpy as np
@@ -10,11 +12,12 @@ import os
 import h5py
 import utils
 from tqdm import tqdm
-from unrolled_net import unrolled_net
 from torch.utils.data import Dataset, DataLoader
 import argparse
 import logging
 from torch.utils.data import random_split
+from unet import build_unet, build_unet_small
+from model_supervised import supervised_net
 
 ## helper functions
 def parse_args():
@@ -23,6 +26,12 @@ def parse_args():
     parser.add_argument('--save_dir', type=str, default='./results', help="Directory to save checkpoints and logs")
     parser.add_argument('--epochs', type=int, default=100, help="Number of training epochs")
     parser.add_argument('--dc', action='store_true', help="Enforce Data Consistency or not")
+    parser.add_argument('--grad', action='store_true', help="Do grad descent step/s or not")
+    parser.add_argument('--ls', action='store_true', help="Do grad descent line search")
+    parser.add_argument('--wav', action='store_true', help="wavelets")
+    parser.add_argument('--share', action='store_true', help="when TRUE, this option makes the unet at all layers of the unrolled network use the same weights")
+    parser.add_argument('--alpha', type=float, default=1e-3, help="(optional) grad descent default step size")
+    parser.add_argument('--n', type=int, default=1, help = 'number of unrolled iters to do (default 1)')
     args = parser.parse_args()
     return args
 
@@ -46,27 +55,23 @@ def evaluate(model, val_loader, device, mask, wavSplit, criterion):
 
             # Initialize input for the model (e.g., zero-filled reconstruction)
             ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
-            ks1 = ks * torch.conj(sens_maps)
-            x_init = torch.sum(ks1, dim = 1) # dim = 1 is coil dimension
-            x_init = x_init.unsqueeze(1)
 
-            wx_init = torch.zeros_like(x_init)
-            wx_init[..., :, :] = math_utils.wtDaubechies2(torch.squeeze(x_init), wavSplit)
+            ## for now let's not do roemer, just SoS of the zero-filled
+            ks1 = ks * torch.conj(sens_maps)
+            # ks1 = ks * torch.conj(ks) # SoS
+            x_init = torch.sum(ks1, dim = 1) # dim = 1 is coil dimension
 
             sens_maps = torch.permute(sens_maps, dims=(0,2,3,1))
-
             kspace_undersampled = torch.permute(kspace_undersampled, (0,2,3,1))
-            kspace_undersampled = kspace_undersampled.unsqueeze(1)
 
             # Forward pass
-            output = model(wx_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
+            output = model(x_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
 
             # Compute target image (e.g., inverse Fourier transform of fully-sampled k-space)
             itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
             itarget = torch.permute(itarget, dims=(0, 2, 3, 1))
             itarget1 = itarget * torch.conj(sens_maps)
             target_image = torch.sum(itarget1, dim=-1) # dim 1 is coil dim
-            target_image = target_image.unsqueeze(1)
 
             # Normalize both to match scale
             output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
@@ -160,7 +165,9 @@ class MRIDataset(Dataset):
         kspace = kspace / np.max(np.abs(kspace)) # Shape: (num_coils, Nx, Ny)
 
         # Preprocess sensitivity map (normalize, split real/imag)
-        sens_map = sens_map / np.max(np.abs(sens_map)) # shape (num_coils, Nx, Ny)
+        # sens_map = sens_map / np.max(np.abs(sens_map)) # shape (num_coils, Nx, Ny)
+        norm_factor = np.sqrt(np.sum(np.abs(sens_map)**2, axis=0))  # [C, H, W]
+        sens_map = sens_map / (norm_factor + 1e-8)
 
         # Convert to PyTorch tensors
         kspace_tensor = torch.from_numpy(kspace)
@@ -203,21 +210,21 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True, drop_last=True)
     
-    # dataloader = DataLoader(
-    #     dataset,
-    #     batch_size=1,          # Adjust based on GPU memory
-    #     shuffle=False,          # Shuffle for training TODO CHange
-    #     num_workers=1,         # Parallel loading (adjust based on system)
-    #     pin_memory=True,       # Faster GPU transfer
-    #     drop_last=True         # Drop incomplete batch
-    # )
-
     # Set device
     # device = torch.device('cpu')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     logging.info(f"data consistency chosen: {args.dc}")
+    logging.info(f"grad chosen: {args.grad}")
     logging.info(f"device chosen: {device}")
+    logging.info(f"linesearch: {args.ls}")
+    if args.ls:
+        logging.info(f"grad step size: N/A (linesearch)")
+    else:
+        logging.info(f"grad step size: {args.alpha}")
+
+    logging.info(f"wavelets: {args.wav}")
+    logging.info(f"sharing weights: {args.share}")
 
     # Define image size
     # sImg = [256, 256]
@@ -229,15 +236,16 @@ def main():
     # Initialize model
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
     dataconsistency = args.dc
-    multicoil = True
-    model = unrolled_net(sImg, device, 10, dataconsistency, multicoil)
+    torch.manual_seed(20250615)
+    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n, share_weights=args.share)
     model = model.to(device)
+
 
     # Define optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Adjusted learning rate
 
     # Create undersampling mask
-    mask = utils.vdSampleMask(sImg, [50, 30], 0.15 * np.prod(sImg), maskType='laplace')
+    mask = utils.vdSampleMask(sImg, [180, 95], 0.05 * np.prod(sImg), maskType='laplace')
     mask = mask > 0
     mask = torch.tensor(mask)
     mask = mask.to(device)
@@ -247,6 +255,9 @@ def main():
 
     # Training parameters
     num_epochs = args.epochs
+
+    # best val loss
+    best_val_loss = float('inf')
 
     # Training loop
     model.train()
@@ -272,29 +283,23 @@ def main():
 
             # Initialize input for the model (e.g., zero-filled reconstruction)
             ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            zf = torch.sqrt((ks.real ** 2 + ks.imag ** 2).sum(dim=1, keepdim=True))  # SoS
+
+            ## roemer input
             ks1 = ks * torch.conj(sens_maps)
             x_init = torch.sum(ks1, dim = 1) # dim = 1 is coil dimension
-            x_init = x_init.unsqueeze(1)
-
-            wx_init = torch.zeros_like(x_init)
-            wx_init[..., :, :] = math_utils.wtDaubechies2(torch.squeeze(x_init), wavSplit)
 
             sens_maps = torch.permute(sens_maps, dims=(0,2,3,1))
-
             kspace_undersampled = torch.permute(kspace_undersampled, (0,2,3,1))
-            kspace_undersampled = kspace_undersampled.unsqueeze(1)
 
             # Forward pass
-            output = model(wx_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
-
-            # Convert output to image space if needed (assuming output is in wavelet domain)
+            output = model(x_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
 
             # Compute target image (e.g., inverse Fourier transform of fully-sampled k-space)
             itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
             itarget = torch.permute(itarget, dims=(0, 2, 3, 1))
             itarget1 = itarget * torch.conj(sens_maps)
             target_image = torch.sum(itarget1, dim=-1) # dim 1 is coil dim
-            target_image = target_image.unsqueeze(1)
 
             # Normalize both to match scale
             output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
@@ -308,6 +313,13 @@ def main():
             loss.backward()
             optimizer.step()
 
+            ## sanity check
+            # for name, param in model.named_parameters():
+            #     if param.grad is not None:
+            #         print(name, param.grad.norm())
+            #     else:
+            #         print(name)
+
             # make sure we're well calibrated?
             # logging.info(f"min output: {torch.min(torch.abs(output))}")
             # logging.info(f"min target: {torch.min(torch.abs(target_image))}")
@@ -315,7 +327,6 @@ def main():
             # logging.info(f"max output: {torch.max(torch.abs(output))}")
             # logging.info(f"max target: {torch.max(torch.abs(target_image))}")
             
-
             # Update running loss
             train_loss += loss.item() * kspace.size(0)
 
@@ -330,8 +341,17 @@ def main():
         val_loss = evaluate(model, val_loader, device, mask, wavSplit, criterion)
         logging.info(f"Validation Loss: {val_loss:.6f}")
 
+        # save for best val loss
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+
+            tstr = f"best_model.pth"
+            checkpoint_path = os.path.join(args.save_dir, tstr)
+            torch.save(model.state_dict(), checkpoint_path)
+            logging.info(f"Saved best checkpoint at epoch {epoch} to {checkpoint_path}")
+
         # Optionally save model checkpoint
-        if (epoch + 1) % 10 == 0:
+        if (epoch + 1) % 100 == 0:
             if dataconsistency:
                 tstr = f"dc_checkpoint_epoch_{epoch+1}.pth"
             else:

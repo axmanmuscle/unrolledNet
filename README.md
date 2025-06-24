@@ -159,3 +159,66 @@ Started writing the fetal data stuff, requires its own training loop since we do
 
 ## 05/15/2025
 have the fetal stuff running on the zero shot unrolled net which shares a network. created a smaller unet. I'm changing the padding boundary conditions for the convolutional layers to see if that helps this weird brightening at the edges i'm seeing.
+
+## 06/06/2025
+Some stuff that needs to get done:
+ - option for supervised learning with and without wavelets
+ - option for supervised learning sharing a network and each block having its own 
+
+## 06/11/2025
+Start debugging stuff but just starting with a supervised unet reconstructing from undersampled k-space (or the zero filled image i guess)
+
+need to write the evaluation script for this and then for the wavelet coefficients one
+probably need to run on the supercomputer
+maybe try a smaller unet?
+
+Wrote two things:
+ - a new class that I can just add stuff to instead of just using the old unet class. this will make building easier
+ - an evaluation script for the new class
+
+
+It would be nice to be able to run with a batch size larger than 1 - give that a whirl at some point
+
+## 06/11/2025 - 2
+Okay, I'm going to change the network so the input is a 2 channel real array so i'm not taking the absolute value before hand. The input is the Roemer recon of the undersampled data stacked up as [Nbatch, 2, Nx, Ny] probably
+
+Fixed LOTS of issues in the supervised model. Some of this will need to get put over in the unrolled net, or else we just build this one into the unrolled net one good idea at a time.
+
+Some stuff we fixed:
+ - making applying data consistency nicer. it now looks like
+ ```python
+    x_exp = x.unsqueeze(-1) # [B, H, W, 1]
+    coil_ims = x_exp * sMaps # [B, H, W, C]
+
+    kSpace = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( coil_ims, dim=(-3,-2) ), norm='ortho',\
+                                              dim = (-3,-2)  ), dim=(-3,-2)  )
+
+    kSpace[..., mask, :] = b[..., mask, :]
+ ```
+
+ notice that we don't construct `out` directly and fill it in, it's a multiplication of x_exp and sMas like we wanted.
+
+ - fixed an (apparent) issue with the Fourier transforms
+ compare the `dim` in the ffts and shifts with the dimensions noted by the variables - they weren't lined up before
+ - batching is now fixed
+ we are no longer doing all sorts of squeeze/unsqueeze stuff, the batching is fixed. this should allow the supercomputer to run much faster i think
+ - ALSO another big one is stacking the real/imag as *channels* not just appending them
+
+
+## To Do
+ - don't share networks amongst layers
+ - wavelet thresholding
+ - grad descent step size as a learnable param?
+
+
+## 6/19
+can't do torch.no_grad with multiple steps! also changed up the mask distribution
+
+## 6/21
+things look good now. split brain into bigger set and testing subset both on supercomputer and here. ready to test!
+
+Nick wants:
+```
+I would say 3%, 5%, 7%, 10%, 15%, and 20%.
+```
+for ablation study

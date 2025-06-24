@@ -683,22 +683,22 @@ def wtDaubechies2_np( img, split = np.array([1]) ):
         if s11.sum() > 0:
             if np.any(np.mod(wt11.shape, 2)):
                 raise ValueError('wt11 is invalid shape')
-            wt11 = wtDaubechies2(wt11, s11)
+            wt11 = wtDaubechies2_np(wt11, s11)
 
         if s12.sum() > 0:
             if np.any(np.mod(wt12.shape, 2)):
                 raise ValueError('wt12 is invalid shape')
-            wt12 = wtDaubechies2(wt12, s12)
+            wt12 = wtDaubechies2_np(wt12, s12)
 
         if s21.sum() > 0:
             if np.any(np.mod(wt21.shape, 2)):
                 raise ValueError('wt21 is invalid shape')
-            wt21 = wtDaubechies2(wt21, s21)
+            wt21 = wtDaubechies2_np(wt21, s21)
 
         if s22.sum() > 0:
             if np.any(np.mod(wt22.shape, 2)):
                 raise ValueError('wt22 is invalid shape')
-            wt22 = wtDaubechies2(wt22, s22)
+            wt22 = wtDaubechies2_np(wt22, s22)
 
 
     a1 = np.concatenate([wt11, wt12], axis=1)
@@ -734,19 +734,19 @@ def iwtDaubechies2_np(wt, split = np.array([1])):
         if s11.sum() > 0:
             if np.any(np.mod(wt11.shape, 2)):
                 raise ValueError('wt11 is invalid shape')
-            wt11 = iwtDaubechies2(wt11, s11)
+            wt11 = iwtDaubechies2_np(wt11, s11)
         if s12.sum() > 0:
             if np.any(np.mod(wt12.shape, 2)):
                 raise ValueError('wt12 is invalid shape')
-            wt12 = iwtDaubechies2(wt12, s12)
+            wt12 = iwtDaubechies2_np(wt12, s12)
         if s21.sum() > 0:
             if np.any(np.mod(wt21.shape, 2)):
                 raise ValueError('wt21 is invalid shape')
-            wt21 = iwtDaubechies2(wt21, s21)
+            wt21 = iwtDaubechies2_np(wt21, s21)
         if s22.sum() > 0:
             if np.any(np.mod(wt22.shape, 2)):
                 raise ValueError('wt22 is invalid shape')
-            wt22 = iwtDaubechies2(wt22, s22)
+            wt22 = iwtDaubechies2_np(wt22, s22)
     
     ## todo: write upsample
     tmp = upsample2_np(wt11, [1, 2])
@@ -806,8 +806,25 @@ def iwtDaubechies2_np(wt, split = np.array([1])):
 
     return img
 
+def runWavProfile():
+    x = torch.randn(256, 256)
+    split = makeWavSplit(x.shape)
+    split = torch.tensor(split)
 
-if __name__ == "__main__":
+    for _ in range(10):
+        out = wtDaubechies2(x, split)
+
+
+def profile_wavelets():
+    import cProfile
+    import pstats
+
+    cProfile.run("runWavProfile()", "profile.out")
+    p = pstats.Stats("profile.out")
+    p.sort_stats("cumulative").print_stats(20)
+    return 0
+
+def test_wavelets():
     rng = np.random.default_rng(2025)
     for _ in range(20):
         x0 = rng.normal(size=(25, 25))
@@ -823,3 +840,7 @@ if __name__ == "__main__":
     torch_wwt = iwtDaubechies2(torch_ww)
     print(torch.norm(torch_wwt - torch.tensor(wwt)))
     print(torch.norm(torch_ww - torch.tensor(ww)))
+
+if __name__ == "__main__":
+    profile_wavelets()
+    # test_wavelets()

@@ -309,8 +309,8 @@ class ZS_Unrolled_Network_onenet(nn.Module):
         self.device = device
         self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
         self.dc = dc
-        # self.unet = build_unet(sImg[1])
-        self.unet = build_unet_smaller(sImg[1])
+        self.unet = build_unet(sImg[1])
+        # self.unet = build_unet_smaller(sImg[1])
         self.cornerOrigin = cornerOrigin # the fetal data origin in image space is in the corner
         mod = []
         if len(sMaps) == 0: # single coil
