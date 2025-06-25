@@ -13,12 +13,6 @@ class WaveletTransform(nn.Module):
         self.wt = Daubechies4Transform(dtype=dtype)
         self.add_module("wt", self.wt)
 
-        # Register filters as buffers (non-trainable, but track device)
-        # self.register_buffer('h0', self.wt.h0)
-        # self.register_buffer('h1', self.wt.h1)
-        # self.register_buffer('g0', self.wt.g0)
-        # self.register_buffer('g1', self.wt.g1)
-
     def forward(self, x):
         # Forward multi-level wavelet decomposition
         coeffs = self.wt.multilevel_dwt_2d(x, self.levels, self.mode)
@@ -413,14 +407,7 @@ def test_wt():
 
     print(torch.norm(wtx - x))
 
-def test_device():
-    wav = WaveletTransform(levels=4).to('cuda')
-    x = torch.randn(1, 2, 256, 256).cuda()
-    y = wav(x)
-    print(y.device)
-
 if __name__ == "__main__":
-    test_device()
     # test_wt()
     # test_coeffs()
-    # wt, x, coeffs = test_wavelet_transform()
+    wt, x, coeffs = test_wavelet_transform()
