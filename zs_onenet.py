@@ -6,19 +6,21 @@ from torchinfo import summary
 import gc
 import utils
 import math_utils
+from wavelet_torch import WaveletTransform
 
 class prox_block(nn.Module):
     """
     just a module for the proximal block
     """
 
-    def __init__(self, sMaps, device, wavSplit, cornerOrigin):
+    def __init__(self, sMaps, device, wavLevels, cornerOrigin):
         super(prox_block, self).__init__()
         self.device = device
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
-        self.wavSplit = wavSplit
         self.cornerOrigin = cornerOrigin
+        self.wavLevels = wavLevels
+        self.wavTrans = WaveletTransform(levels=self.wavLevels).to(self.device)
 
     def forward(self, inputs):
         """
@@ -28,7 +30,10 @@ class prox_block(nn.Module):
         x, mask, b, nn = inputs
 
         # wavelet coefficients to image space
-        x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
+        x = utils.complex_to_channels(torch.squeeze(x, 1))
+        x = self.wavTrans.inverse(x)
+        x = utils.channels_to_complex(x)
+        # x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
 
         x = x[None, None, :, :]
 
@@ -67,12 +72,13 @@ class final_block_nodc(nn.Module):
     final block for the wavelet network
     """
 
-    def __init__(self, sMaps, device, wavSplit):
+    def __init__(self, sMaps, device, wavLevels):
         super(final_block_nodc, self).__init__()
         self.device = device
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
-        self.wavSplit = wavSplit
+        self.wavLevels = wavLevels
+        self.wavTrans = WaveletTransform(levels=self.wavLevels).to(self.device)
 
     def forward(self, inputs):
         """
@@ -82,7 +88,9 @@ class final_block_nodc(nn.Module):
         x, mask, b, _ = inputs
 
         # wavelet coefficients to image space
-        x = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
+        x = utils.complex_to_channels(torch.squeeze(x, 1))
+        x = self.wavTrans.inverse(x)
+        x = utils.channels_to_complex(x)
 
         return x
 
@@ -90,31 +98,34 @@ class unrolled_block(nn.Module):
     """
     unrolled block for single shared network
     """
-    def __init__(self, sMaps, wavSplit, device, dc=True, cornerOrigin=False):
+    def __init__(self, sMaps, wavLevels, device, dc=True, cornerOrigin=False):
         super(unrolled_block, self).__init__()
         self.sMaps = sMaps
         self.nCoils = sMaps.shape[-1]
         self.device = device
-        self.wavSplit = wavSplit
+        self.wavLevels = wavLevels
         self.dc = dc
         self.cornerOrigin = cornerOrigin
+        self.wavTrans = WaveletTransform(levels=self.wavLevels).to(self.device)
 
     def applyW(self, x, op='notransp'):
         """
         wavelet transform here
         going to assume that x is [1, 1, *sImg]
         """
-        out = torch.zeros_like(x)
-        if op == 'transp':
-            out[..., :, :] = math_utils.iwtDaubechies2(torch.squeeze(x), self.wavSplit)
-        else: 
-            out[..., :, :] = math_utils.wtDaubechies2(torch.squeeze(x), self.wavSplit)
 
-        del x
+        x_chan = utils.complex_to_channels(torch.squeeze(x, 1))
+                                       
+        if op == 'transp':
+            x_out = self.wavTrans.inverse(x_chan)
+        else: 
+            x_out = self.wavTrans(x_chan)
+
+        del x_chan
         torch.cuda.empty_cache()
-        # gc.collect()
-        
-        return out
+
+        out = utils.channels_to_complex(x_out)        
+        return out.unsqueeze(0)
     
     def applyS(self, x, op='notransp'):
         if op == 'transp':
@@ -268,33 +279,14 @@ class unrolled_block(nn.Module):
         # wavelets to image space
         out = self.applyW(out, 'transp')
 
-        out = torch.view_as_real(out)
-        n = out.shape[-3]
-        out_r = torch.cat((out[..., 0], out[..., 1]), dim=2)
-
-        del out # memory management
-        # gc.collect()
-        torch.cuda.empty_cache()
-
-        post_unet = nn(out_r)
-        post_unet_r = post_unet[..., :n, :]
-        post_unet_im = post_unet[..., n:, :]
-
-        post_unet = torch.stack((post_unet_r, post_unet_im), dim=-1)
-        
-        del post_unet_r, post_unet_im
-        # gc.collect()
-        torch.cuda.empty_cache()
-
-        out = torch.view_as_complex(post_unet)
+        out = utils.complex_to_channels(torch.squeeze(out, 1))
+        post_unet = nn(out)
+        out = utils.channels_to_complex(post_unet)
+        out = out.unsqueeze(0)
 
         # don't know if we need this or not
         # mval = torch.max(torch.abs(out))
         # out = out / mval
-
-        del post_unet
-        # gc.collect()
-        torch.cuda.empty_cache()
 
         # back to wavelet coeffs
         out = self.applyW(out)
@@ -308,20 +300,21 @@ class ZS_Unrolled_Network_onenet(nn.Module):
         self.n = n
         self.device = device
         self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
+        self.wavLevels = 4
         self.dc = dc
         # self.unet = build_unet(sImg[1])
-        self.unet = build_unet_small(sImg[1])
+        self.unet = build_unet_smaller(sImg[1])
         self.cornerOrigin = cornerOrigin # the fetal data origin in image space is in the corner
         mod = []
         if len(sMaps) == 0: # single coil
             assert False, 'single coil not implemented for wavelets yet'
         else: # multicoil
             for i in range(n):
-                mod.append(unrolled_block(sMaps, self.wavSplit, device, dc, cornerOrigin))
+                mod.append(unrolled_block(sMaps, self.wavLevels, device, dc, cornerOrigin))
             if dc:
-                mod.append(prox_block(sMaps, device, self.wavSplit, cornerOrigin))
+                mod.append(prox_block(sMaps, device, self.wavLevels, cornerOrigin))
             else:
-                mod.append(final_block_nodc(sMaps, device, self.wavSplit))
+                mod.append(final_block_nodc(sMaps, device, self.wavLevels))
 
         self.model = nn.Sequential(*mod)
 
