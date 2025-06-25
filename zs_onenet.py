@@ -259,14 +259,14 @@ class unrolled_block(nn.Module):
         # adjoint testing
         # self.sMaps = self.sMaps.to(torch.complex128)
         # err = math_utils.test_adjoint_torch(x.to(torch.complex128), applyA)
-        with torch.no_grad(): ## helps immensely 
-            out = self.grad_desc(x, applyA, b)
+        # with torch.no_grad(): ## helps immensely 
+        out = self.grad_desc(x, applyA, b)
 
-            if self.dc:
-                out = self.prox(out, mask, b)
+        if self.dc:
+            out = self.prox(out, mask, b)
 
-            # wavelets to image space
-            out = self.applyW(out, 'transp')
+        # wavelets to image space
+        out = self.applyW(out, 'transp')
 
         out = torch.view_as_real(out)
         n = out.shape[-3]
@@ -309,8 +309,8 @@ class ZS_Unrolled_Network_onenet(nn.Module):
         self.device = device
         self.wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
         self.dc = dc
-        self.unet = build_unet(sImg[1])
-        # self.unet = build_unet_smaller(sImg[1])
+        # self.unet = build_unet(sImg[1])
+        self.unet = build_unet_small(sImg[1])
         self.cornerOrigin = cornerOrigin # the fetal data origin in image space is in the corner
         mod = []
         if len(sMaps) == 0: # single coil

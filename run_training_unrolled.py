@@ -252,7 +252,7 @@ def run_training_fetalData(ks, sImg, sMaps, rng, train_frac,
   print('multi coil')
   print('running with zs unrolled sharing the network')
   sMaps = sMaps.to(device)
-  model = ZS_Unrolled_Network_onenet(sImg, device, sMaps, 10, dc=dc, cornerOrigin=True)
+  model = ZS_Unrolled_Network_onenet(sImg, device, sMaps, 2, dc=dc, cornerOrigin=True)
 
   model = model.to(device)
   optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
@@ -457,17 +457,17 @@ def test_sc():
 def fetalData():
   rng = np.random.default_rng(20250515)
 
-  kspace_data = sio.loadmat('/home/alex/Documents/MATLAB/fetalData/slice80.mat')
-  smaps_data = sio.loadmat('/home/alex/Documents/MATLAB/fetalData/slice80_smaps_shift.mat')
-
-  kSpace = kspace_data["slice80"]
+  # kspace_data = sio.loadmat('/home/alex/Documents/MATLAB/fetalData/slice80.mat')
+  # smaps_data = sio.loadmat('/home/alex/Documents/MATLAB/fetalData/slice80_smaps_shift.mat')
+  data = sio.loadmat('/home/alex/Documents/MATLAB/fetalData/fixed_smaps/slice141.mat')
+  kSpace = data["kspace"]
   kSpace = kSpace / np.max(np.abs(kSpace))
-  sMaps = smaps_data['smaps']
+  sMaps = data['smaps']
   sMaps = sMaps / np.max(np.abs(sMaps))
 
   sImg = kSpace.shape[0:2]
 
-  results_dir = '/home/alex/Documents/research/mri/results/fetalData/newBatch'
+  results_dir = '/home/alex/Documents/research/mri/results/fetalData/624_change/slice141'
 
   nBatch = 1
   sMaps = torch.tensor(sMaps, dtype=torch.complex64)
@@ -481,8 +481,8 @@ def fetalData():
 
   train_fracs = [0.925]
   train_loss_split_frac = 0.9
-  k_s = [25]
-  dcs = [True]
+  k_s = [50]
+  dcs = [True, False]
   val_stop_trainings = [50]
 
   for tf in train_fracs:
@@ -492,7 +492,7 @@ def fetalData():
 
           run_training_fetalData(kSpace2, sImg, sMaps, rng, 
                     tf, train_loss_split_frac, 
-                    k, dc, results_dir, vst, 75)
+                    k, dc, results_dir, vst, 50)
   return 0
 
 
