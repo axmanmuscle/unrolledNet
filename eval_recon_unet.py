@@ -126,6 +126,10 @@ def main():
             all_psnr.append(psnr)
             all_ssim.append(ssim)
 
+            print(f"  MSE  : {np.mean(mse):.6f}")
+            print(f"  PSNR : {np.mean(psnr):.2f} dB")
+            print(f"  SSIM : {np.mean(ssim):.4f}")
+
     print(f"\nEvaluation Results on {len(dataset)} slices:")
     print(f"  Avg MSE  : {np.mean(all_mse):.6f}")
     print(f"  Avg PSNR : {np.mean(all_psnr):.2f} dB")

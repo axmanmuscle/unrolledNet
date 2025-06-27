@@ -18,6 +18,7 @@ import logging
 from torch.utils.data import random_split
 from unet import build_unet, build_unet_small
 from model_supervised import supervised_net
+import matplotlib.pyplot as plt
 
 ## helper functions
 def parse_args():
@@ -249,9 +250,14 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Adjusted learning rate
 
     # Create undersampling mask
-    mask = utils.vdSampleMask(sImg, [180, 95], 0.05 * np.prod(sImg), maskType='laplace')
+    mask = utils.vdSampleMask(sImg, [180, 95], .30 * np.prod(sImg), maskType='laplace')
     mask = mask > 0
-    mask = torch.tensor(mask)
+    sFSR = [40, 20]
+    fsr = utils.makeFullySampledCenterRegion(sImg, sFSR)
+    fsr = fsr > 0
+    msk2 = mask | fsr
+    plt.imsave('msktest3.png', msk2, cmap='gray')
+    mask = torch.tensor(msk2)
     mask = mask.to(device)
 
     # Define loss function

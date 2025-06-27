@@ -245,6 +245,28 @@ def mri_reconRoemer(coilRecons, sMaps = []):
 
     return recon
 
+def makeFullySampledCenterRegion(smask, shape):
+    """
+    make a fully sampled center region mask
+    INPUTS:
+      smask - size of total mask
+      shape - size of fully sampled region
+    """
+
+    mask = np.zeros(smask)
+
+    center = np.array(smask) // 2 # this should be the center point
+    shapeRad = np.array(shape) // 2
+
+    topY = center[0] - shapeRad[0]
+    bottomY = center[0] + shapeRad[0]
+
+    leftX = center[1] - shapeRad[1]
+    rightX = center[1] + shapeRad[1]
+
+    mask[topY:bottomY, leftX:rightX] = 1
+    return mask
+
 def vdSampleMask(smask, sigmas, numSamps, maskType = 'laplace'):
     """
     generates a vd sample mask
@@ -425,12 +447,12 @@ def test():
     small_frac = 0.15
 
     mask = undersample_kspace(sImg, rng, sample_frac)
-    plt.imshow(mask, cmap='gray')
-    plt.show()
+    # plt.imshow(mask, cmap='gray')
+    # plt.show()
 
     mask2 = undersample_kspace_gaussian(sImg, rng, sample_frac)
-    plt.imshow(mask2, cmap='gray')
-    plt.show()
+    # plt.imshow(mask2, cmap='gray')
+    # plt.show()
 
     rng1 = np.random.default_rng(2024)
     m1, t1 = mask_split(mask, rng1, big_frac)
@@ -438,6 +460,11 @@ def test():
     m2, t2 = training_val_split(mask, rng2, big_frac)
     rng3 = np.random.default_rng(2024)
     m3, t3 = training_loss_split(mask, rng3, small_frac)
+
+    sFSR = [32, 32]
+    msk = makeFullySampledCenterRegion(sImg, sFSR)
+    
+    plt.imsave('maskTest_fsr.png', msk, cmap='gray')
 
     return 0
 
