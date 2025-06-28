@@ -64,8 +64,13 @@ def main():
     model.eval()
     model.to(device)
 
-    mask = utils.vdSampleMask(sImg, [180, 95], 0.075 * np.prod(sImg), maskType='laplace')
-    mask = (torch.tensor(mask) > 0).to(device)
+    mask = utils.vdSampleMask(sImg, [180, 95], 0.3 * np.prod(sImg), maskType='laplace')
+    mask = mask > 0
+    sFSR = [40, 20]
+    fsr = utils.makeFullySampledCenterRegion(sImg, sFSR)
+    fsr = fsr > 0
+    msk2 = mask | fsr
+    mask = (torch.tensor(msk2) > 0).to(device)
 
     all_mse, all_psnr, all_ssim = [], [], []
 

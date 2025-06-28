@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument('--alpha', type=float, default=1e-3, help="(optional) grad descent default step size")
     parser.add_argument('--n', type=int, default=1, help = 'number of unrolled iters to do (default 1)')
     parser.add_argument('--checkpoint', type=str, default='false', help="checkpoint from which to resume training")
+    parser.add_argument('--sf', type=float, default = '0.1', help='total sample burden to use (NOTE: this may not be exact due to presence of fully sampled center region)')
     args = parser.parse_args()
     return args
 
@@ -227,6 +228,7 @@ def main():
 
     logging.info(f"wavelets: {args.wav}")
     logging.info(f"sharing weights: {args.share}")
+    logging.info(f"sample fraction (requested): {args.sf}")
 
     # Define image size
     # sImg = [256, 256]
@@ -250,7 +252,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Adjusted learning rate
 
     # Create undersampling mask
-    mask = utils.vdSampleMask(sImg, [180, 95], .30 * np.prod(sImg), maskType='laplace')
+    mask = utils.vdSampleMask(sImg, [180, 95], args.sf * np.prod(sImg), maskType='laplace')
     mask = mask > 0
     sFSR = [40, 20]
     fsr = utils.makeFullySampledCenterRegion(sImg, sFSR)
@@ -259,6 +261,9 @@ def main():
     plt.imsave('msktest3.png', msk2, cmap='gray')
     mask = torch.tensor(msk2)
     mask = mask.to(device)
+
+    actual_samples = torch.sum(mask)
+    logging.info(f"sample fraction (actual): {float(actual_samples) / np.prod(sImg)}")
 
     # Define loss function
     criterion = torch.nn.MSELoss()
