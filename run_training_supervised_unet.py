@@ -258,7 +258,7 @@ def main():
     fsr = utils.makeFullySampledCenterRegion(sImg, sFSR)
     fsr = fsr > 0
     msk2 = mask | fsr
-    plt.imsave('msktest3.png', msk2, cmap='gray')
+    # plt.imsave('msktest3.png', msk2, cmap='gray')
     mask = torch.tensor(msk2)
     mask = mask.to(device)
 

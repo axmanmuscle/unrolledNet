@@ -13,6 +13,8 @@ from skimage.metrics import structural_similarity as compare_ssim
 from skimage.metrics import peak_signal_noise_ratio as compare_psnr
 from tqdm import tqdm
 from model_supervised import supervised_net
+import csv
+
 
 def save_image(tensor, path, cmap='gray'):
     img = tensor.squeeze().cpu().numpy()
@@ -73,6 +75,10 @@ def main():
     mask = (torch.tensor(msk2) > 0).to(device)
 
     all_mse, all_psnr, all_ssim = [], [], []
+    csv_path = os.path.join(args.save_dir, "metrics.csv")
+    csv_file = open(csv_path, mode='w', newline='')
+    csv_writer = csv.writer(csv_file)
+    csv_writer.writerow(["Index", "MSE", "PSNR", "SSIM"])
 
     with torch.no_grad():
         for idx, (kspace, sens_maps, _) in enumerate(tqdm(loader)):
@@ -120,10 +126,10 @@ def main():
             output = torch.abs(output)
 
             # Save reconstructions
-            save_image(gt, os.path.join(args.save_dir, f"{idx:04d}_gt.png"))
-            save_image(x_init.abs(), os.path.join(args.save_dir, f"{idx:04d}_input.png"))
-            save_image(zf, os.path.join(args.save_dir, f"{idx:04d}_zf.png"))
-            save_image(output, os.path.join(args.save_dir, f"{idx:04d}_recon.png"))
+            # save_image(gt, os.path.join(args.save_dir, f"{idx:04d}_gt.png"))
+            # save_image(x_init.abs(), os.path.join(args.save_dir, f"{idx:04d}_input.png"))
+            # save_image(zf, os.path.join(args.save_dir, f"{idx:04d}_zf.png"))
+            # save_image(output, os.path.join(args.save_dir, f"{idx:04d}_recon.png"))
 
             # Compute metrics
             mse, psnr, ssim = compute_metrics(output, gt)
@@ -134,6 +140,9 @@ def main():
             print(f"  MSE  : {np.mean(mse):.6f}")
             print(f"  PSNR : {np.mean(psnr):.2f} dB")
             print(f"  SSIM : {np.mean(ssim):.4f}")
+            csv_writer.writerow([idx, mse, psnr, ssim])
+
+    csv_file.close()
 
     print(f"\nEvaluation Results on {len(dataset)} slices:")
     print(f"  Avg MSE  : {np.mean(all_mse):.6f}")
