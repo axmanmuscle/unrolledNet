@@ -300,6 +300,12 @@ def main():
             ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
             zf = torch.sqrt((ks.real ** 2 + ks.imag ** 2).sum(dim=1, keepdim=True))  # SoS
 
+            ## estim noise
+            noise_val = ks[..., :25, :25]
+            eps = []
+            for i in range(ks.shape[1]):
+                eps.append(torch.std(noise_val[:, i, ...]))
+
             ## roemer input
             ks1 = ks * torch.conj(sens_maps)
             x_init = torch.sum(ks1, dim = 1) # dim = 1 is coil dimension
@@ -308,7 +314,7 @@ def main():
             kspace_undersampled = torch.permute(kspace_undersampled, (0,2,3,1))
 
             # Forward pass
-            output = model(x_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
+            output = model(x_init, mask, kspace_undersampled, sens_maps, eps)  # Output shape: (batch, H, W)
 
             # Compute target image (e.g., inverse Fourier transform of fully-sampled k-space)
             itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])

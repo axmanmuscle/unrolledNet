@@ -362,7 +362,47 @@ class supervised_net(nn.Module):
         elif self.grad and not self.wav:
             self.grad_step = grad_desc(self.alpha, self.ls)
 
-    def apply_dc(self, x, mask, b, sMaps):
+    def apply_dc_onecoil(self, coil_ks, mask, b, eps):
+        """
+        individual coil helper function
+        coil_ks is k-space
+        """
+        mz = coil_ks * mask
+        bmz = b - mz
+        l = torch.norm(bmz)
+        alpha = torch.min(torch.tensor([1, 1 - torch.sqrt(eps) / l]))
+
+        out = coil_ks + alpha * bmz
+        return out
+
+    def apply_dc(self, x, mask, b, sMaps, eps):
+        """
+        apply data consistency with a nonzero epsilon
+        we'll apply FS to the image to get per-coil data in k-space
+        then project each individual coil to its counterpart in b via eps
+        then roemer reconstruct
+        """
+        nCoils = sMaps.shape[-1]
+        # sMaps: [B, H, W, C], x: [B, H, W]
+        x_exp = x.unsqueeze(-1) # [B, H, W, 1]
+        coil_ims = x_exp * sMaps # [B, H, W, C]
+
+        kSpace = torch.fft.fftshift( torch.fft.fftn( torch.fft.ifftshift( coil_ims, dim=(-3,-2) ), norm='ortho',\
+                                                dim = (-3,-2)  ), dim=(-3,-2)  )
+        
+        coil_ks_dc = torch.zeros_like(coil_ims)
+        for i in range(nCoils):
+            coili = torch.squeeze(kSpace[..., i])
+            coil_ks_dc[..., i] = self.apply_dc_onecoil(coili, mask, torch.squeeze(b[..., i]), eps[i])
+
+        coil_ims_dc = torch.fft.fftshift( torch.fft.ifftn( torch.fft.ifftshift( coil_ks_dc, dim=(-3,-2) ), norm='ortho',\
+                                                dim =(-3,-2) ), dim=(-3,-2) )
+
+        out = torch.sum( torch.conj(sMaps) * coil_ims_dc, -1 ) #roemer
+
+        return out
+    
+    def apply_dc_zero(self, x, mask, b, sMaps):
         """
         just the data consistency layer
       
@@ -391,7 +431,7 @@ class supervised_net(nn.Module):
 
         return out
 
-    def forward(self, x, mask = None, b = None, sMaps = None):
+    def forward(self, x, mask = None, b = None, sMaps = None, eps = []):
       """
       here we assume the inputs are:
       x - [batchsize x 1 x Nx x Ny] complex image
@@ -425,7 +465,7 @@ class supervised_net(nn.Module):
 
         # step 2: (optionally) apply data consistency
         if self.dc:              
-            x = self.apply_dc(x, mask, b, sMaps)
+            x = self.apply_dc(x, mask, b, sMaps, eps)
 
         # step 3: convert to channels and apply unet
         in_norm = x.norm(dim=(-2,-1), keepdim=True)
@@ -443,7 +483,7 @@ class supervised_net(nn.Module):
         
       # finally do DC before output
       if self.dc:              
-            x = self.apply_dc(x, mask, b, sMaps)
+            x = self.apply_dc(x, mask, b, sMaps, eps)
 
       return x
     
