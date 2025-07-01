@@ -59,6 +59,12 @@ def evaluate(model, val_loader, device, mask, wavSplit, criterion):
             # Initialize input for the model (e.g., zero-filled reconstruction)
             ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
 
+            ## estim noise
+            noise_val = ks[..., :25, :25]
+            eps = []
+            for i in range(ks.shape[1]):
+                eps.append(torch.std(noise_val[:, i, ...]))
+
             ## for now let's not do roemer, just SoS of the zero-filled
             ks1 = ks * torch.conj(sens_maps)
             # ks1 = ks * torch.conj(ks) # SoS
@@ -68,7 +74,7 @@ def evaluate(model, val_loader, device, mask, wavSplit, criterion):
             kspace_undersampled = torch.permute(kspace_undersampled, (0,2,3,1))
 
             # Forward pass
-            output = model(x_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
+            output = model(x_init, mask, kspace_undersampled, sens_maps, eps)  # Output shape: (batch, H, W)
 
             # Compute target image (e.g., inverse Fourier transform of fully-sampled k-space)
             itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
@@ -193,12 +199,12 @@ def main():
     # logging
     logging.basicConfig(
     level=logging.INFO,
-    format='[%(asctime)s] %(levelname)s - %(message)s',
+    format='[%(asctime)s] %(levelname)s - %(name)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler(os.path.join(args.save_dir, "train.log"), mode='w')
     ]
-)
+    )
 
     # Create dataset
     dataset = MRIDataset(kspace_dir=kspace_dir, sens_dir=sens_dir)
