@@ -12,6 +12,8 @@ import utils
 import math_utils
 from wavelet_torch import WaveletTransform
 
+import logging
+
 class unrolled_block(nn.Module):
     """
     we probably need A matrix free huh
@@ -443,6 +445,7 @@ class supervised_net(nn.Module):
       """
       assert x.ndim == 3, "x at input must be [B, H, W] (complex)"
       assert b is not None and sMaps is not None and mask is not None
+      logger = logging.getLogger(__name__)
 
       for iter in range(self.n):
         if self.wav:
@@ -464,8 +467,12 @@ class supervised_net(nn.Module):
             # x = wx[None, :]
 
         # step 2: (optionally) apply data consistency
-        if self.dc:              
-            x = self.apply_dc(x, mask, b, sMaps, eps)
+        if self.dc:
+            if len(eps) > 0:
+                x = self.apply_dc(x, mask, b, sMaps, eps)
+            else:
+                logger.info('applying dc zero since eps is empty')
+                x = self.apply_dc_zero(x, mask, b, sMaps)
 
         # step 3: convert to channels and apply unet
         in_norm = x.norm(dim=(-2,-1), keepdim=True)
@@ -483,7 +490,11 @@ class supervised_net(nn.Module):
         
       # finally do DC before output
       if self.dc:              
-            x = self.apply_dc(x, mask, b, sMaps, eps)
+            if len(eps) > 0:
+                x = self.apply_dc(x, mask, b, sMaps, eps)
+            else:
+                logger.info('applying dc zero since eps is empty')
+                x = self.apply_dc_zero(x, mask, b, sMaps)
 
       return x
     
