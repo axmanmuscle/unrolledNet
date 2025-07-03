@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import gc
+import torch.nn.functional as F
 
 def complex_mul(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """
@@ -222,6 +223,16 @@ def mixed_loss(output, target, mask):
     tm = target * mask
     n = torch.norm(om - tm) / torch.norm(tm) + torch.norm(om - tm, 1) / torch.norm(tm, 1)
     return n
+
+def supervised_mse_loss(output, target):
+    return F.mse_loss(output.real, target.real) + F.mse_loss(output.imag, target.imag) 
+
+def supervised_mixed_loss(output, target, lambda_):
+    mse_real = F.mse_loss(output.real, target.real)
+    mse_imag = F.mse_loss(output.imag, target.imag)
+    l1_loss = F.l1_loss(output, target)
+    return mse_real + mse_imag + lambda_ * l1_loss
+
 
 def kspace_to_imspace(kspace):
   

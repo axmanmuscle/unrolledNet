@@ -7,7 +7,7 @@ import utils
 import torchvision
 import matplotlib.pyplot as plt
 from unet import build_unet
-from run_training_supervised_gpt import MRIDataset
+from run_training_supervised_unet import MRIDataset
 from torch.utils.data import DataLoader
 from skimage.metrics import structural_similarity as compare_ssim
 from skimage.metrics import peak_signal_noise_ratio as compare_psnr
@@ -122,14 +122,16 @@ def main():
             # x_init = torch.sum(ks1, dim=1, keepdim=True)
 
             # Network output
-            output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
+            # output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
             output = torch.abs(output)
+            output[output > 1] = 1
+            output[output < 0] = 0
 
             # Save reconstructions
-            # save_image(gt, os.path.join(args.save_dir, f"{idx:04d}_gt.png"))
-            # save_image(x_init.abs(), os.path.join(args.save_dir, f"{idx:04d}_input.png"))
+            save_image(gt, os.path.join(args.save_dir, f"{idx:04d}_gt.png"))
+            save_image(x_init.abs(), os.path.join(args.save_dir, f"{idx:04d}_input.png"))
             # save_image(zf, os.path.join(args.save_dir, f"{idx:04d}_zf.png"))
-            # save_image(output, os.path.join(args.save_dir, f"{idx:04d}_recon.png"))
+            save_image(output, os.path.join(args.save_dir, f"{idx:04d}_recon.png"))
 
             # Compute metrics
             mse, psnr, ssim = compute_metrics(output, gt)

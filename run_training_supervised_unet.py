@@ -19,6 +19,7 @@ from torch.utils.data import random_split
 from unet import build_unet, build_unet_small
 from model_supervised import supervised_net
 import matplotlib.pyplot as plt
+from math_utils import supervised_mse_loss, supervised_mixed_loss
 
 ## helper functions
 def parse_args():
@@ -34,7 +35,8 @@ def parse_args():
     parser.add_argument('--alpha', type=float, default=1e-3, help="(optional) grad descent default step size")
     parser.add_argument('--n', type=int, default=1, help = 'number of unrolled iters to do (default 1)')
     parser.add_argument('--checkpoint', type=str, default='false', help="checkpoint from which to resume training")
-    parser.add_argument('--sf', type=float, default = '0.1', help='total sample burden to use (NOTE: this may not be exact due to presence of fully sampled center region)')
+    parser.add_argument('--sf', type=float, default = 0.1, help='total sample burden to use (NOTE: this may not be exact due to presence of fully sampled center region)')
+    parser.add_argument('--lambd', type=float, default = 0.5, help = 'loss function is || x-y ||_2^2 + lambda*||x - y||_1')
     args = parser.parse_args()
     return args
 
@@ -272,7 +274,12 @@ def main():
     logging.info(f"sample fraction (actual): {float(actual_samples) / np.prod(sImg)}")
 
     # Define loss function
-    criterion = torch.nn.MSELoss()
+    if np.abs(args.lambd) < 1e-10:
+        criterion = supervised_mse_loss()
+        logging.info(f"loss function: || x - y ||_2^2")
+    else:
+        criterion = lambda x, y: supervised_mixed_loss(x, y, args.lambd)
+        logging.info(f"loss function: || x - y ||_2^2 + {args.lambd} * || x - y ||_1")
 
     # Training parameters
     num_epochs = args.epochs
@@ -326,14 +333,15 @@ def main():
             itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
             itarget = torch.permute(itarget, dims=(0, 2, 3, 1))
             itarget1 = itarget * torch.conj(sens_maps)
-            target_image = torch.sum(itarget1, dim=-1) # dim 1 is coil dim
+            target_image = torch.sum(itarget1, dim=-1) # dim -1 is coil dim
 
             # Normalize both to match scale
-            output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
-            target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
+            # output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
+            # target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
 
             # Compute loss (MSE between reconstructed and target images)
-            loss = criterion(output.abs(), target_image.abs())
+            # loss = criterion(output.abs(), target_image.abs())
+            loss = criterion(output, target_image)
 
             # Backward pass and optimization
             optimizer.zero_grad()
