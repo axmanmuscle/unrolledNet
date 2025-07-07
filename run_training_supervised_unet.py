@@ -276,7 +276,7 @@ def main():
 
     # Define loss function
     if np.abs(args.lambd) < 1e-10:
-        criterion = supervised_mse_loss()
+        criterion = lambda x, y: supervised_mse_loss(x, y)
         logging.info(f"loss function: || x - y ||_2^2")
     else:
         criterion = lambda x, y: supervised_mixed_loss(x, y, args.lambd)
