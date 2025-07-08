@@ -252,8 +252,8 @@ def main():
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
     dataconsistency = args.dc
     torch.manual_seed(20250615)
-    # model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n, share_weights=args.share)
-    model = supervised_unet(sImg, device)
+    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n, share_weights=args.share)
+    # model = supervised_unet(sImg, device)
     model = model.to(device)
 
     if args.checkpoint != 'false':

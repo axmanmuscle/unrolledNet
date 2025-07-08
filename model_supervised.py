@@ -5,7 +5,7 @@ we're going to start with literally just the unet and the data consistency layer
 import torch
 import torch.nn as nn
 import numpy as np
-from unet import build_unet ,build_unet_small, build_unet_smaller
+from unet import build_unet ,build_unet_small, build_unet_smaller, build_unet_smaller_clamp
 from torchinfo import summary
 import gc
 import utils
@@ -137,9 +137,9 @@ class supervised_net(nn.Module):
         self.n = n
         self.share_weights = share_weights
         if share_weights:
-            self.unet = build_unet_smaller(sImg[-1])
+            self.unet = build_unet_smaller_clamp(sImg[-1])
         else:
-            self.unet_list = nn.ModuleList([build_unet_smaller(sImg[-1]) for _ in range(n)])
+            self.unet_list = nn.ModuleList([build_unet_smaller_clamp(sImg[-1]) for _ in range(n)])
 
         self.grad = grad
         self.wav = wavelets
