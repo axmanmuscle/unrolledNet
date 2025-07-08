@@ -21,7 +21,7 @@ from model_supervised import supervised_net
 import matplotlib.pyplot as plt
 from math_utils import supervised_mse_loss, supervised_mixed_loss
 
-from model_unet import supervised_unet
+# from model_unet import supervised_unet
 
 ## helper functions
 def parse_args():
