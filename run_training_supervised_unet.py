@@ -21,6 +21,8 @@ from model_supervised import supervised_net
 import matplotlib.pyplot as plt
 from math_utils import supervised_mse_loss, supervised_mixed_loss
 
+from model_unet import supervised_unet
+
 ## helper functions
 def parse_args():
     parser = argparse.ArgumentParser(description="Train unrolled MRI reconstruction model")
@@ -250,7 +252,8 @@ def main():
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
     dataconsistency = args.dc
     torch.manual_seed(20250615)
-    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n, share_weights=args.share)
+    # model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n, share_weights=args.share)
+    model = supervised_unet(sImg, device)
     model = model.to(device)
 
     if args.checkpoint != 'false':

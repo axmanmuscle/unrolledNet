@@ -26,12 +26,12 @@ def compute_metrics(recon, gt):
     # recon, gt: torch tensors with shape (1, H, W) or (H, W)
     recon_np = recon.squeeze().cpu().numpy()
     gt_np = gt.squeeze().cpu().numpy()
-    recon_np /= recon_np.max()
-    gt_np /= gt_np.max()
+    # recon_np /= recon_np.max()
+    # gt_np /= gt_np.max()
 
     mse = np.mean((recon_np - gt_np) ** 2)
-    psnr = compare_psnr(gt_np, recon_np, data_range=1.0)
-    ssim = compare_ssim(gt_np, recon_np, data_range=1.0)
+    psnr = compare_psnr(gt_np, recon_np, data_range=gt_np.max())
+    ssim = compare_ssim(gt_np, recon_np, data_range=gt_np.max())
     return mse, psnr, ssim
 
 def parse_args():
@@ -66,7 +66,7 @@ def main():
     model.eval()
     model.to(device)
 
-    mask = utils.vdSampleMask(sImg, [180, 95], 0.3 * np.prod(sImg), maskType='laplace')
+    mask = utils.vdSampleMask(sImg, [180, 95], 0.2 * np.prod(sImg), maskType='laplace')
     mask = mask > 0
     sFSR = [40, 20]
     fsr = utils.makeFullySampledCenterRegion(sImg, sFSR)
