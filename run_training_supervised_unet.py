@@ -42,7 +42,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def evaluate(model, val_loader, device, mask, wavSplit, criterion):
+def evaluate(model, val_loader, device, mask, criterion):
     model.eval()
     val_loss = 0
     with torch.no_grad():
@@ -339,6 +339,8 @@ def main():
             itarget1 = itarget * torch.conj(sens_maps)
             target_image = torch.sum(itarget1, dim=-1) # dim -1 is coil dim
 
+            target_image = target_image / torch.max(torch.abs(target_image))
+
             # Normalize both to match scale
             # output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
             # target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
@@ -377,7 +379,7 @@ def main():
         logging.info(f"Epoch {epoch+1}/{num_epochs}, Average Loss: {epoch_loss:.6f}")
 
         # compute validation loss
-        val_loss = evaluate(model, val_loader, device, mask, wavSplit, criterion)
+        val_loss = evaluate(model, val_loader, device, mask, criterion)
         logging.info(f"Validation Loss: {val_loss:.6f}")
 
         # save for best val loss
