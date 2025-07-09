@@ -323,7 +323,7 @@ def main():
                 kspace_undersampled = kspace * mask_exp
 
             # Initialize input for the model (e.g., zero-filled reconstruction)
-            ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), norm='ortho', dim = [2, 3]), dim = [2, 3])
             zf = torch.sqrt((ks.real ** 2 + ks.imag ** 2).sum(dim=1, keepdim=True))  # SoS
 
             ## estim noise
@@ -343,12 +343,12 @@ def main():
             output = model(x_init, mask, kspace_undersampled, sens_maps, eps)  # Output shape: (batch, H, W)
 
             # Compute target image (e.g., inverse Fourier transform of fully-sampled k-space)
-            itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), norm='ortho', dim = [2, 3]), dim = [2, 3])
             itarget = torch.permute(itarget, dims=(0, 2, 3, 1))
             itarget1 = itarget * torch.conj(sens_maps)
             target_image = torch.sum(itarget1, dim=-1) # dim -1 is coil dim
 
-            target_image = target_image / torch.max(torch.abs(target_image))
+            # target_image = target_image / torch.max(torch.abs(target_image))
 
             # Normalize both to match scale
             # output = output / output.abs().amax(dim=(-2, -1), keepdim=True)

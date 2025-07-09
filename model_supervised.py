@@ -250,6 +250,20 @@ class supervised_net(nn.Module):
       logger = logging.getLogger(__name__)
 
       for iter in range(self.n):
+
+        # step 0: convert to channels and apply unet
+        # in_norm = x.norm(dim=(-2,-1), keepdim=True)
+        x = utils.complex_to_channels(x)
+        if self.share_weights:
+            nn = self.unet
+        else:
+            nn = self.unet_list[iter]
+        
+        x = nn(x)
+        x = utils.channels_to_complex(x)
+        # out_norm = x.norm(dim=(-2,-1), keepdim=True)
+        # x = x / (out_norm + 1e-8) * in_norm
+        
         if self.wav:
             # convert to wavelet coefficients
             # wx = torch.squeeze(x)
@@ -275,19 +289,6 @@ class supervised_net(nn.Module):
             else:
                 logger.info('applying dc zero since eps is empty')
                 x = self.apply_dc_zero(x, mask, b, sMaps)
-
-        # step 3: convert to channels and apply unet
-        in_norm = x.norm(dim=(-2,-1), keepdim=True)
-        x = utils.complex_to_channels(x)
-        if self.share_weights:
-            nn = self.unet
-        else:
-            nn = self.unet_list[iter]
-        
-        x = nn(x)
-        x = utils.channels_to_complex(x)
-        out_norm = x.norm(dim=(-2,-1), keepdim=True)
-        x = x / (out_norm + 1e-8) * in_norm
 
         
       # finally do DC before output
