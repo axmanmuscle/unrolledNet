@@ -227,10 +227,19 @@ def mixed_loss(output, target, mask):
 def supervised_mse_loss(output, target):
     return F.mse_loss(output.real, target.real) + F.mse_loss(output.imag, target.imag) 
 
+def supervised_sse_loss(output, target):
+    return F.mse_loss(output.real, target.real, reduction='sum') + F.mse_loss(output.imag, target.imag, reduction='sum')
+
 def supervised_mixed_loss(output, target, lambda_):
     mse_real = F.mse_loss(output.real, target.real)
     mse_imag = F.mse_loss(output.imag, target.imag)
     l1_loss = F.l1_loss(output, target)
+    return mse_real + mse_imag + lambda_ * l1_loss
+
+def supervised_mixed_loss_sum(output, target, lambda_):
+    mse_real = F.mse_loss(output.real, target.real, reduction='sum')
+    mse_imag = F.mse_loss(output.imag, target.imag, reduction='sum')
+    l1_loss = F.l1_loss(output, target, reduction='sum')
     return mse_real + mse_imag + lambda_ * l1_loss
 
 
