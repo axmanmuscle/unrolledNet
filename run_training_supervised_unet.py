@@ -19,7 +19,7 @@ from torch.utils.data import random_split
 from unet import build_unet, build_unet_small
 from model_supervised import supervised_net
 import matplotlib.pyplot as plt
-from math_utils import supervised_mse_loss, supervised_mixed_loss
+from math_utils import supervised_mse_loss, supervised_mixed_loss, supervised_sse_loss, supervised_mixed_loss_sum
 
 # from model_unet import supervised_unet
 
@@ -39,6 +39,7 @@ def parse_args():
     parser.add_argument('--checkpoint', type=str, default='false', help="checkpoint from which to resume training")
     parser.add_argument('--sf', type=float, default = 0.1, help='total sample burden to use (NOTE: this may not be exact due to presence of fully sampled center region)')
     parser.add_argument('--lambd', type=float, default = 0.5, help = 'loss function is || x-y ||_2^2 + lambda*||x - y||_1')
+    parser.add_argument('--sum', action='store_true', help='if this is true/enabled, use the sum of errors instead of mean reduction for loss')
     args = parser.parse_args()
     return args
 
@@ -279,11 +280,19 @@ def main():
 
     # Define loss function
     if np.abs(args.lambd) < 1e-10:
-        criterion = lambda x, y: supervised_mse_loss(x, y)
-        logging.info(f"loss function: || x - y ||_2^2")
+        if args.sum:
+            criterion = lambda x, y: supervised_sse_loss(x, y)
+            logging.info(f"loss function: sum || x - y ||_2^2")
+        else:
+            criterion = lambda x, y: supervised_mse_loss(x, y)
+            logging.info(f"loss function: mean || x - y ||_2^2")
     else:
-        criterion = lambda x, y: supervised_mixed_loss(x, y, args.lambd)
-        logging.info(f"loss function: || x - y ||_2^2 + {args.lambd} * || x - y ||_1")
+        if args.sum:
+            criterion = lambda x, y: supervised_mixed_loss_sum(x, y, args.lambd)
+            logging.info(f"loss function: sum || x - y ||_2^2 + {args.lambd} * || x - y ||_1")
+        else:
+            criterion = lambda x, y: supervised_mixed_loss(x, y, args.lambd)
+            logging.info(f"loss function: mean || x - y ||_2^2 + {args.lambd} * || x - y ||_1")
 
     # Training parameters
     num_epochs = args.epochs
