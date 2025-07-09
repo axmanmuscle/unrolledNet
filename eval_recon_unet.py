@@ -29,7 +29,9 @@ def compute_metrics(recon, gt):
     # recon_np /= recon_np.max()
     # gt_np /= gt_np.max()
 
-    mse = np.mean((recon_np - gt_np) ** 2)
+    mse = np.mean((recon_np.real - gt_np.real) ** 2) + np.mean((recon_np.imag - gt_np.imag) ** 2)
+    gt_np = np.abs(gt_np)
+    recon_np = np.abs(recon_np)
     psnr = compare_psnr(gt_np, recon_np, data_range=gt_np.max())
     ssim = compare_ssim(gt_np, recon_np, data_range=gt_np.max())
     return mse, psnr, ssim
@@ -105,16 +107,21 @@ def main():
             sens_maps = torch.permute(sens_maps, dims=(0,2,3,1))
             kspace_undersampled = torch.permute(kspace_undersampled, (0,2,3,1))
 
+            ## estim noise
+            noise_val = ks[..., :25, :25]
+            eps = []
+            for i in range(ks.shape[1]):
+                eps.append(torch.std(noise_val[:, i, ...]))
+
             # Forward pass
-            output = model(x_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
+            output = model(x_init, mask, kspace_undersampled, sens_maps, eps)  # Output shape: (batch, H, W)
 
             # Ground truth image
             gt = torch.fft.ifftshift(torch.fft.ifftn(torch.fft.fftshift(kspace, dim=[2, 3]), dim=[2, 3]), dim=[2, 3])
             gt = torch.permute(gt, dims=(0, 2, 3, 1))
             gt = gt * torch.conj(sens_maps)
             gt = torch.sum(gt, dim=-1, keepdim=True)
-            gt = gt / gt.abs().amax(dim=(-3, -2), keepdim=True)
-            gt = torch.abs(gt)
+            gt = gt / torch.max(torch.abs(gt))
 
             # Input to network
             # ks1 = ks * torch.conj(sens_maps)
@@ -123,15 +130,12 @@ def main():
 
             # Network output
             # output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
-            output = torch.abs(output)
-            output[output > 1] = 1
-            output[output < 0] = 0
 
             # Save reconstructions
             save_image(gt, os.path.join(args.save_dir, f"{idx:04d}_gt.png"))
             save_image(x_init.abs(), os.path.join(args.save_dir, f"{idx:04d}_input.png"))
             # save_image(zf, os.path.join(args.save_dir, f"{idx:04d}_zf.png"))
-            save_image(output, os.path.join(args.save_dir, f"{idx:04d}_recon.png"))
+            save_image(output.abs(), os.path.join(args.save_dir, f"{idx:04d}_recon.png"))
 
             # Compute metrics
             mse, psnr, ssim = compute_metrics(output, gt)
