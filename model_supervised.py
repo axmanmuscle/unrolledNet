@@ -137,9 +137,9 @@ class supervised_net(nn.Module):
         self.n = n
         self.share_weights = share_weights
         if share_weights:
-            self.unet = build_unet_smaller_clamp(sImg[-1])
+            self.unet = build_unet_smaller(sImg[-1])
         else:
-            self.unet_list = nn.ModuleList([build_unet_smaller_clamp(sImg[-1]) for _ in range(n)])
+            self.unet_list = nn.ModuleList([build_unet_smaller(sImg[-1]) for _ in range(n)])
 
         self.grad = grad
         self.wav = wavelets
@@ -277,7 +277,7 @@ class supervised_net(nn.Module):
                 x = self.apply_dc_zero(x, mask, b, sMaps)
 
         # step 3: convert to channels and apply unet
-        # in_norm = x.norm(dim=(-2,-1), keepdim=True)
+        in_norm = x.norm(dim=(-2,-1), keepdim=True)
         x = utils.complex_to_channels(x)
         if self.share_weights:
             nn = self.unet
@@ -286,8 +286,8 @@ class supervised_net(nn.Module):
         
         x = nn(x)
         x = utils.channels_to_complex(x)
-        # out_norm = x.norm(dim=(-2,-1), keepdim=True)
-        # x = x / (out_norm + 1e-8) * in_norm
+        out_norm = x.norm(dim=(-2,-1), keepdim=True)
+        x = x / (out_norm + 1e-8) * in_norm
 
         
       # finally do DC before output
