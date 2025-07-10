@@ -18,6 +18,7 @@ import logging
 from torch.utils.data import random_split
 from unet import build_unet, build_unet_small
 from model_supervised import supervised_net
+from model_supervised_separate import unrolled_net_separate
 import matplotlib.pyplot as plt
 from math_utils import supervised_mse_loss, supervised_mixed_loss, supervised_sse_loss, supervised_mixed_loss_sum
 
@@ -252,8 +253,10 @@ def main():
     # Initialize model
     wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
     dataconsistency = args.dc
-    torch.manual_seed(20250615)
-    model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n, share_weights=args.share)
+    torch.manual_seed(20250709)
+
+    model = unrolled_net_separate(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n)
+    # model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n, share_weights=args.share)
     # model = supervised_unet(sImg, device)
     model = model.to(device)
 
@@ -350,32 +353,13 @@ def main():
 
             # target_image = target_image / torch.max(torch.abs(target_image))
 
-            # Normalize both to match scale
-            # output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
-            # target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
-
             # Compute loss (MSE between reconstructed and target images)
-            # loss = criterion(output.abs(), target_image.abs())
             loss = criterion(output, target_image)
 
             # Backward pass and optimization
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-            ## sanity check
-            # for name, param in model.named_parameters():
-            #     if param.grad is not None:
-            #         print(name, param.grad.norm())
-            #     else:
-            #         print(name)
-
-            # make sure we're well calibrated?
-            # logging.info(f"min output: {torch.min(torch.abs(output))}")
-            # logging.info(f"min target: {torch.min(torch.abs(target_image))}")
-
-            # logging.info(f"max output: {torch.max(torch.abs(output))}")
-            # logging.info(f"max target: {torch.max(torch.abs(target_image))}")
             
             # Update running loss
             train_loss += loss.item() * kspace.size(0)
