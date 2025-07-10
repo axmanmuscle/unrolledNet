@@ -46,11 +46,11 @@ class decoder_block(nn.Module):
     def __init__(self, in_c, out_c):
         super().__init__()
 
-        self.up = nn.ConvTranspose2d(in_c, out_c, kernel_size=2, stride=2, padding=0)
-        # self.up = nn.Sequential(
-        #   nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-        #   nn.Conv2d(in_c, out_c, kernel_size=3, padding=1, padding_mode='circular'),
-        # )
+        # self.up = nn.ConvTranspose2d(in_c, out_c, kernel_size=2, stride=1, padding='same')
+        self.up = nn.Sequential(
+          nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+          nn.Conv2d(in_c, out_c, kernel_size=5, padding='same', padding_mode='circular'),
+        )
         self.conv = conv_block(out_c+out_c, out_c)
 
     def forward(self, inputs, skip):
