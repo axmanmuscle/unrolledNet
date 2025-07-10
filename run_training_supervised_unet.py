@@ -332,8 +332,8 @@ def main():
             ## estim noise
             noise_val = ks[..., :25, :25]
             eps = []
-            for i in range(ks.shape[1]):
-                eps.append(torch.std(noise_val[:, i, ...]))
+            # for i in range(ks.shape[1]):
+            #     eps.append(torch.std(noise_val[:, i, ...]))
 
             ## roemer input
             ks1 = ks * torch.conj(sens_maps)
