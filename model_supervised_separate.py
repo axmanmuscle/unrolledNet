@@ -262,7 +262,7 @@ class unrolled_net_separate(nn.Module):
             if len(eps) > 0:
                 x = self.apply_dc(x, mask, b, sMaps, eps)
             else:
-                logger.info('applying dc zero since eps is empty')
+                # logger.info('applying dc zero since eps is empty')
                 x = self.apply_dc_zero(x, mask, b, sMaps)
 
       return x
