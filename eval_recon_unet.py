@@ -26,12 +26,14 @@ def compute_metrics(recon, gt):
     # recon, gt: torch tensors with shape (1, H, W) or (H, W)
     recon_np = recon.squeeze().cpu().numpy()
     gt_np = gt.squeeze().cpu().numpy()
-    recon_np /= recon_np.max()
-    gt_np /= gt_np.max()
+    # recon_np /= recon_np.max()
+    # gt_np /= gt_np.max()
 
-    mse = np.mean((recon_np - gt_np) ** 2)
-    psnr = compare_psnr(gt_np, recon_np, data_range=1.0)
-    ssim = compare_ssim(gt_np, recon_np, data_range=1.0)
+    mse = np.mean((recon_np.real - gt_np.real) ** 2 + (recon_np.imag - gt_np.imag) ** 2)
+    gt_np = np.abs(gt_np)
+    recon_np = np.abs(recon_np)
+    psnr = compare_psnr(gt_np, recon_np, data_range=gt_np.max())
+    ssim = compare_ssim(gt_np, recon_np, data_range=gt_np.max())
     return mse, psnr, ssim
 
 def parse_args():
@@ -66,7 +68,7 @@ def main():
     model.eval()
     model.to(device)
 
-    mask = utils.vdSampleMask(sImg, [180, 95], 0.3 * np.prod(sImg), maskType='laplace')
+    mask = utils.vdSampleMask(sImg, [180, 95], 0.2 * np.prod(sImg), maskType='laplace')
     mask = mask > 0
     sFSR = [40, 20]
     fsr = utils.makeFullySampledCenterRegion(sImg, sFSR)
@@ -95,7 +97,7 @@ def main():
 
 
             # Initialize input for the model (e.g., zero-filled reconstruction)
-            ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), norm='ortho', dim = [2, 3]), dim = [2, 3])
             zf = torch.sqrt((ks.real ** 2 + ks.imag ** 2).sum(dim=1, keepdim=True))  # SoS
 
             ## roemer input
@@ -109,12 +111,12 @@ def main():
             output = model(x_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
 
             # Ground truth image
-            gt = torch.fft.ifftshift(torch.fft.ifftn(torch.fft.fftshift(kspace, dim=[2, 3]), dim=[2, 3]), dim=[2, 3])
+            gt = torch.fft.ifftshift(torch.fft.ifftn(torch.fft.fftshift(kspace, dim=[2, 3]), dim=[2, 3]), norm='ortho', dim=[2, 3])
             gt = torch.permute(gt, dims=(0, 2, 3, 1))
             gt = gt * torch.conj(sens_maps)
             gt = torch.sum(gt, dim=-1, keepdim=True)
-            gt = gt / gt.abs().amax(dim=(-3, -2), keepdim=True)
-            gt = torch.abs(gt)
+            # gt = gt / gt.abs().amax(dim=(-3, -2), keepdim=True)
+            # gt = torch.abs(gt)
 
             # Input to network
             # ks1 = ks * torch.conj(sens_maps)
@@ -122,8 +124,8 @@ def main():
             # x_init = torch.sum(ks1, dim=1, keepdim=True)
 
             # Network output
-            output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
-            output = torch.abs(output)
+            # output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
+            # output = torch.abs(output)
 
             # Save reconstructions
             # save_image(gt, os.path.join(args.save_dir, f"{idx:04d}_gt.png"))
