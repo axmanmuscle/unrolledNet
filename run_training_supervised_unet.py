@@ -182,8 +182,8 @@ class MRIDataset(Dataset):
 
         # Preprocess sensitivity map (normalize, split real/imag)
         # sens_map = sens_map / np.max(np.abs(sens_map)) # shape (num_coils, Nx, Ny)
-        norm_factor = np.sqrt(np.sum(np.abs(sens_map)**2, axis=0))  # [C, H, W]
-        sens_map = sens_map / (norm_factor + 1e-8)
+        # norm_factor = np.sqrt(np.sum(np.abs(sens_map)**2, axis=0))  # [C, H, W]
+        # sens_map = sens_map / (norm_factor + 1e-8)
 
         # Convert to PyTorch tensors
         kspace_tensor = torch.from_numpy(kspace)
@@ -251,7 +251,6 @@ def main():
       break
 
     # Initialize model
-    wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
     dataconsistency = args.dc
     torch.manual_seed(20250709)
 

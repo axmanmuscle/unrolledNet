@@ -97,7 +97,7 @@ def main():
 
 
             # Initialize input for the model (e.g., zero-filled reconstruction)
-            ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), norm='ortho', dim = [2, 3]), dim = [2, 3])
             zf = torch.sqrt((ks.real ** 2 + ks.imag ** 2).sum(dim=1, keepdim=True))  # SoS
 
             ## roemer input
@@ -117,7 +117,7 @@ def main():
             output = model(x_init, mask, kspace_undersampled, sens_maps, eps)  # Output shape: (batch, H, W)
 
             # Ground truth image
-            gt = torch.fft.ifftshift(torch.fft.ifftn(torch.fft.fftshift(kspace, dim=[2, 3]), dim=[2, 3]), dim=[2, 3])
+            gt = torch.fft.ifftshift(torch.fft.ifftn(torch.fft.fftshift(kspace, dim=[2, 3]), norm='orth', dim=[2, 3]), dim=[2, 3])
             gt = torch.permute(gt, dims=(0, 2, 3, 1))
             gt = gt * torch.conj(sens_maps)
             gt = torch.sum(gt, dim=-1, keepdim=True)

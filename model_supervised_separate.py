@@ -126,7 +126,7 @@ class grad_desc(nn.Module):
 
 
 class unrolled_net_separate(nn.Module):
-    def __init__(self, sImg, device, linesearch=True, alpha=0.001, dc=True, wavelets=True, grad=True, n=4):
+    def __init__(self, sImg, device, linesearch=True, alpha=0.001, dc=True, wavelets=True, grad=True, n=4, unet=True):
         super(unrolled_net_separate, self).__init__()
         self.device = device
         self.unet = build_unet_smaller(sImg[-1])
@@ -136,6 +136,7 @@ class unrolled_net_separate(nn.Module):
         self.wavelets = wavelets
         self.grad = grad
         self.norm = nn.InstanceNorm2d(2, affine=True)
+        self.has_unet = unet
 
         if self.wavelets:
             self.wavLevels = 4
@@ -243,11 +244,12 @@ class unrolled_net_separate(nn.Module):
       logger = logging.getLogger(__name__)
 
       for i in range(self.n):
-        x = utils.complex_to_channels(x)
-        nn = self.unet_list[i]
-        x = nn(x)
-        x = self.norm(x)
-        x = utils.channels_to_complex(x)
+        if self.has_unet:
+            x = utils.complex_to_channels(x)
+            nn = self.unet_list[i]
+            x = nn(x)
+            x = self.norm(x)
+            x = utils.channels_to_complex(x)
 
         if self.wavelets:
             x = self.W(x)
