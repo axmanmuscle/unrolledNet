@@ -111,7 +111,7 @@ def main():
             output = model(x_init, mask, kspace_undersampled, sens_maps)  # Output shape: (batch, H, W)
 
             # Ground truth image
-            gt = torch.fft.ifftshift(torch.fft.ifftn(torch.fft.fftshift(kspace, dim=[2, 3]), dim=[2, 3]), norm='ortho', dim=[2, 3])
+            gt = torch.fft.ifftshift(torch.fft.ifftn(torch.fft.fftshift(kspace, dim=[2, 3]), norm='ortho', dim=[2, 3]), dim=[2, 3])
             gt = torch.permute(gt, dims=(0, 2, 3, 1))
             gt = gt * torch.conj(sens_maps)
             gt = torch.sum(gt, dim=-1, keepdim=True)
@@ -128,10 +128,10 @@ def main():
             # output = torch.abs(output)
 
             # Save reconstructions
-            # save_image(gt, os.path.join(args.save_dir, f"{idx:04d}_gt.png"))
-            # save_image(x_init.abs(), os.path.join(args.save_dir, f"{idx:04d}_input.png"))
+            save_image(gt, os.path.join(args.save_dir, f"{idx:04d}_gt.png"))
+            save_image(x_init.abs(), os.path.join(args.save_dir, f"{idx:04d}_input.png"))
             # save_image(zf, os.path.join(args.save_dir, f"{idx:04d}_zf.png"))
-            # save_image(output, os.path.join(args.save_dir, f"{idx:04d}_recon.png"))
+            save_image(output, os.path.join(args.save_dir, f"{idx:04d}_recon.png"))
 
             # Compute metrics
             mse, psnr, ssim = compute_metrics(output, gt)
