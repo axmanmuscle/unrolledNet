@@ -19,6 +19,7 @@ from torch.utils.data import random_split
 from unet import build_unet, build_unet_small
 from model_supervised import supervised_net
 import matplotlib.pyplot as plt
+from math_utils import supervised_mse_loss, supervised_mixed_loss, supervised_sse_loss, supervised_mixed_loss_sum
 
 ## helper functions
 def parse_args():
@@ -35,10 +36,12 @@ def parse_args():
     parser.add_argument('--n', type=int, default=1, help = 'number of unrolled iters to do (default 1)')
     parser.add_argument('--checkpoint', type=str, default='false', help="checkpoint from which to resume training")
     parser.add_argument('--sf', type=float, default = '0.1', help='total sample burden to use (NOTE: this may not be exact due to presence of fully sampled center region)')
+    parser.add_argument('--lambd', type=float, default = 0.5, help = 'loss function is || x-y ||_2^2 + lambda*||x - y||_1')
+    parser.add_argument('--sum', action='store_true', help='if this is true/enabled, use the sum of errors instead of mean reduction for loss')
     args = parser.parse_args()
     return args
 
-def evaluate(model, val_loader, device, mask, wavSplit, criterion):
+def evaluate(model, val_loader, device, mask, criterion):
     model.eval()
     val_loss = 0
     with torch.no_grad():
@@ -57,7 +60,7 @@ def evaluate(model, val_loader, device, mask, wavSplit, criterion):
                 kspace_undersampled[~mask] = 0
 
             # Initialize input for the model (e.g., zero-filled reconstruction)
-            ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), norm='ortho', dim = [2, 3]), dim = [2, 3])
 
             ## estim noise
             noise_val = ks[..., :25, :25]
@@ -77,7 +80,7 @@ def evaluate(model, val_loader, device, mask, wavSplit, criterion):
             output = model(x_init, mask, kspace_undersampled, sens_maps, eps)  # Output shape: (batch, H, W)
 
             # Compute target image (e.g., inverse Fourier transform of fully-sampled k-space)
-            itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), norm='ortho', dim = [2, 3]), dim = [2, 3])
             itarget = torch.permute(itarget, dims=(0, 2, 3, 1))
             itarget1 = itarget * torch.conj(sens_maps)
             target_image = torch.sum(itarget1, dim=-1) # dim 1 is coil dim
@@ -175,8 +178,8 @@ class MRIDataset(Dataset):
 
         # Preprocess sensitivity map (normalize, split real/imag)
         # sens_map = sens_map / np.max(np.abs(sens_map)) # shape (num_coils, Nx, Ny)
-        norm_factor = np.sqrt(np.sum(np.abs(sens_map)**2, axis=0))  # [C, H, W]
-        sens_map = sens_map / (norm_factor + 1e-8)
+        # norm_factor = np.sqrt(np.sum(np.abs(sens_map)**2, axis=0))  # [C, H, W]
+        # sens_map = sens_map / (norm_factor + 1e-8)
 
         # Convert to PyTorch tensors
         kspace_tensor = torch.from_numpy(kspace)
@@ -244,7 +247,6 @@ def main():
       break
 
     # Initialize model
-    wavSplit = torch.tensor(math_utils.makeWavSplit(sImg))
     dataconsistency = args.dc
     torch.manual_seed(20250615)
     model = supervised_net(sImg, device, dc=dataconsistency, grad=args.grad, linesearch=args.ls, alpha=args.alpha, wavelets=args.wav, n = args.n, share_weights=args.share)
@@ -272,7 +274,20 @@ def main():
     logging.info(f"sample fraction (actual): {float(actual_samples) / np.prod(sImg)}")
 
     # Define loss function
-    criterion = torch.nn.MSELoss()
+    if np.abs(args.lambd) < 1e-10:
+        if args.sum:
+            criterion = lambda x, y: supervised_sse_loss(x, y)
+            logging.info(f"loss function: sum || x - y ||_2^2")
+        else:
+            criterion = lambda x, y: supervised_mse_loss(x, y)
+            logging.info(f"loss function: mean || x - y ||_2^2")
+    else:
+        if args.sum:
+            criterion = lambda x, y: supervised_mixed_loss_sum(x, y, args.lambd)
+            logging.info(f"loss function: sum || x - y ||_2^2 + {args.lambd} * || x - y ||_1")
+        else:
+            criterion = lambda x, y: supervised_mixed_loss(x, y, args.lambd)
+            logging.info(f"loss function: mean || x - y ||_2^2 + {args.lambd} * || x - y ||_1")
 
     # Training parameters
     num_epochs = args.epochs
@@ -303,7 +318,7 @@ def main():
                 kspace_undersampled = kspace * mask_exp
 
             # Initialize input for the model (e.g., zero-filled reconstruction)
-            ks = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(kspace_undersampled, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            ks = torch.fft.fftshift( torch.fft.ifftn(torch.fft.ifftshift(kspace_undersampled, dim=[2, 3]), norm='ortho', dim = [2, 3]), dim = [2, 3])
             zf = torch.sqrt((ks.real ** 2 + ks.imag ** 2).sum(dim=1, keepdim=True))  # SoS
 
             ## estim noise
@@ -323,18 +338,19 @@ def main():
             output = model(x_init, mask, kspace_undersampled, sens_maps, eps)  # Output shape: (batch, H, W)
 
             # Compute target image (e.g., inverse Fourier transform of fully-sampled k-space)
-            itarget = torch.fft.ifftshift( torch.fft.ifftn(torch.fft.fftshift(target, dim=[2, 3]), dim = [2, 3]), dim = [2, 3])
+            itarget = torch.fft.fftshift( torch.fft.ifftn(torch.fft.ifftshift(target, dim=[2, 3]), norm='ortho', dim = [2, 3]), dim = [2, 3])
             itarget = torch.permute(itarget, dims=(0, 2, 3, 1))
             itarget1 = itarget * torch.conj(sens_maps)
             target_image = torch.sum(itarget1, dim=-1) # dim 1 is coil dim
 
             # Normalize both to match scale
-            output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
-            target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
+            # output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
+            # target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
 
             # Compute loss (MSE between reconstructed and target images)
-            loss = criterion(output.abs(), target_image.abs())
+            # loss = criterion(output.abs(), target_image.abs())
 
+            loss = criterion(output, target_image)
             # Backward pass and optimization
             optimizer.zero_grad()
             loss.backward()
@@ -365,7 +381,7 @@ def main():
         logging.info(f"Epoch {epoch+1}/{num_epochs}, Average Loss: {epoch_loss:.6f}")
 
         # compute validation loss
-        val_loss = evaluate(model, val_loader, device, mask, wavSplit, criterion)
+        val_loss = evaluate(model, val_loader, device, mask, criterion)
         logging.info(f"Validation Loss: {val_loss:.6f}")
 
         # save for best val loss
