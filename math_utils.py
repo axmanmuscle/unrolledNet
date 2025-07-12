@@ -242,6 +242,14 @@ def supervised_mixed_loss_sum(output, target, lambda_):
     l1_loss = F.l1_loss(output, target, reduction='sum')
     return mse_real + mse_imag + lambda_ * l1_loss
 
+def mixed_loss(output, target, lambda_):
+    """
+    a version of mixed loss for the magnitude images????? idfk
+    """
+    mse_loss = F.mse_loss(output, target)
+    l1_loss = F.l1_loss(output, target)
+    return mse_loss + lambda_ * l1_loss
+
 def kspace_to_imspace(kspace):
   
     im_space = np.fft.ifftshift( np.fft.ifftn( np.fft.fftshift( kspace, axes=(0, 1)),  axes=(0, 1) ), axes=(0,1))

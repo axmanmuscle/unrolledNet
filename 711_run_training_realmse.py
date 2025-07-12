@@ -19,7 +19,7 @@ from torch.utils.data import random_split
 from unet import build_unet, build_unet_small
 from model_supervised import supervised_net
 import matplotlib.pyplot as plt
-from math_utils import supervised_mse_loss, supervised_mixed_loss, supervised_sse_loss, supervised_mixed_loss_sum
+from math_utils import supervised_mse_loss, supervised_mixed_loss, supervised_sse_loss, supervised_mixed_loss_sum, mixed_loss
 
 ## helper functions
 def parse_args():
@@ -274,7 +274,12 @@ def main():
     logging.info(f"sample fraction (actual): {float(actual_samples) / np.prod(sImg)}")
 
     # Define loss function
-    criterion = torch.nn.MSELoss()
+    if np.abs(args.lambd) < 1e-10:
+      criterion = torch.nn.MSELoss()
+      logging.info(f"loss function: mean || x - y ||_2^2")
+    else:
+      criterion = lambda x, y: mixed_loss(x, y, args.lambd)
+      logging.info(f"loss function: mean || x - y ||_2^2 + {args.lambd} * || x - y ||_1")
 
     # Training parameters
     num_epochs = args.epochs
