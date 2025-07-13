@@ -340,7 +340,10 @@ def main():
             target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
 
             # Compute loss (MSE between reconstructed and target images)
-            loss = criterion(output.abs(), target_image.abs())
+            if np.abs(args.lambd) < 1e-10:
+              loss = criterion(output.abs(), target_image.abs())
+            else:
+              loss = criterion(output, target_image)
 
             # loss = criterion(output, target_image)
             # Backward pass and optimization

@@ -246,7 +246,7 @@ def mixed_loss(output, target, lambda_):
     """
     a version of mixed loss for the magnitude images????? idfk
     """
-    mse_loss = F.mse_loss(output, target)
+    mse_loss = F.mse_loss(output.abs(), target.abs())
     l1_loss = F.l1_loss(output, target)
     return mse_loss + lambda_ * l1_loss
 
