@@ -86,9 +86,9 @@ def evaluate(model, val_loader, device, mask, criterion):
             target_image = torch.sum(itarget1, dim=-1) # dim 1 is coil dim
 
             # Normalize both to match scale
-            output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
-            target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
-            loss = criterion(output.abs(), target_image.abs())
+            # output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
+            # target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
+            loss = criterion(output, target_image)
             # loss = criterion(output, target_image)
             val_loss += loss.item()
     return val_loss / len(val_loader.dataset)
@@ -344,8 +344,8 @@ def main():
             target_image = torch.sum(itarget1, dim=-1) # dim 1 is coil dim
 
             # Normalize both to match scale
-            output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
-            target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
+            # output = output / output.abs().amax(dim=(-2, -1), keepdim=True)
+            # target_image = target_image / target_image.abs().amax(dim=(-2, -1), keepdim=True)
 
             # Compute loss (MSE between reconstructed and target images)
             loss = criterion(output, target_image)
